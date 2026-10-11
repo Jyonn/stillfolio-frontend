@@ -1029,8 +1029,7 @@ button { color: inherit; }
 .account-auth-form input:focus { border-bottom-color: var(--ink); }
 .account-code-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: .7rem; }
 .account-send-code { min-width: 5.4rem; border: 1px solid var(--line); padding: 0 .8rem; background: transparent; color: var(--ink); cursor: pointer; font-size: .56rem; }
-.account-send-code:disabled, .account-auth-start:disabled, .account-logout:disabled { cursor: wait; opacity: .45; }
-.account-auth-start { display: block; margin: 1.25rem 0 0 auto; border: 1px solid var(--ink); padding: .7rem 1rem; background: var(--ink); color: var(--paper); cursor: pointer; font-size: .62rem; }
+.account-send-code:disabled, .user-done:disabled, .account-logout:disabled { cursor: wait; opacity: .45; }
 .account-service-note { margin: .8rem 0 0; color: #8b5a51; font-size: .56rem; line-height: 1.6; text-align: right; }
 .account-service-note:not(.error) { color: #6f7665; }
 .user-subpanel { padding: 1.15rem 0 1.4rem; border-bottom: 1px solid var(--line); }

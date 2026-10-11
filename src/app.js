@@ -213,7 +213,6 @@ app.innerHTML = `
             <label><span>手机号</span><input class="account-phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="请输入中国大陆手机号" maxlength="13" required></label>
             <label><span>验证码</span><span class="account-code-row"><input class="account-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码" maxlength="6" required><button class="account-send-code" type="button">获取验证码</button></span></label>
             <p class="account-service-note" role="status" hidden></p>
-            <button class="account-auth-start" type="submit">连接云端</button>
           </form>
         </section>
         <section class="user-subpanel avatar-setting" data-user-view="avatar" hidden>
@@ -416,6 +415,7 @@ function showUserPanel(name = '') {
   document.querySelectorAll('[data-user-view]').forEach(panel => {
     panel.hidden = panel.dataset.userView !== name;
   });
+  el['user-done'].textContent = name === 'account' ? '连接云端' : '完成';
 }
 
 let cloudUser = null;
@@ -682,7 +682,13 @@ const cloudRestorePromise = cloudAccountRepository.restore().then(user => {
 
 document.querySelectorAll('.user-profile-trigger').forEach(trigger => trigger.addEventListener('click', openUserModal));
 el['user-modal-close'].addEventListener('click', closeUserModal);
-el['user-done'].addEventListener('click', closeUserModal);
+el['user-done'].addEventListener('click', () => {
+  if (!document.querySelector('.account-setting').hidden) {
+    document.querySelector('.account-auth-form').requestSubmit();
+    return;
+  }
+  closeUserModal();
+});
 document.querySelector('.user-modal-backdrop').addEventListener('click', closeUserModal);
 document.querySelector('.user-settings').addEventListener('click', event => {
   const entry = event.target.closest('[data-user-panel]');
@@ -726,7 +732,7 @@ document.querySelector('.account-send-code').addEventListener('click', async eve
 
 document.querySelector('.account-auth-form').addEventListener('submit', async event => {
   event.preventDefault();
-  const submit = event.currentTarget.querySelector('.account-auth-start');
+  const submit = el['user-done'];
   submit.disabled = true;
   try {
     cloudUser = await cloudAccountRepository.verify({
