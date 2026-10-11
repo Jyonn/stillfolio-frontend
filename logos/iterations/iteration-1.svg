@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 512" role="img" aria-labelledby="title desc">
+  <title id="title">留幅 STILLFOLIO — 坐标取景器正式稿</title>
+  <desc id="desc">坐标取景器图形与留幅中英文名称组成的品牌标志</desc>
+  <g id="icon" transform="translate(48 82)" fill="none" stroke="#201F1B" stroke-width="20" stroke-linecap="square">
+    <path d="M0 96V0h96M252 0h96v96M348 252v96h-96M96 348H0v-96"/>
+    <path d="M43 238c57-82 108-91 153-46 31 31 55 27 70 6" stroke="#918979" stroke-width="16"/>
+    <circle cx="287" cy="113" r="21" fill="#201F1B" stroke="none"/>
+  </g>
+  <g id="wordmark" fill="#201F1B">
+    <text x="458" y="235" font-family="Songti SC, Noto Serif CJK SC, serif" font-size="94" font-weight="600" letter-spacing="12">留幅</text>
+    <text x="463" y="300" font-family="Helvetica Neue, Arial, sans-serif" font-size="31" font-weight="600" letter-spacing="9">STILLFOLIO</text>
+  </g>
+</svg>

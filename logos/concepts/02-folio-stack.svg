@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" role="img" aria-labelledby="title desc">
+  <title id="title">留幅 STILLFOLIO — 影页</title>
+  <desc id="desc">三张错落的影页形成作品集，一枚圆点代表光线、快门与地理坐标。</desc>
+  <g id="mark" transform="translate(62 44)">
+    <rect x="0" y="30" width="150" height="190" fill="none" stroke="#B8B0A1" stroke-width="10"/>
+    <rect x="30" y="15" width="150" height="190" fill="#F5F3ED" stroke="#6E695F" stroke-width="10"/>
+    <rect x="60" y="0" width="150" height="190" fill="#201F1B"/>
+    <circle cx="168" cy="43" r="13" fill="#F5F3ED"/>
+    <path d="M82 153l38-45 24 27 23-21 21 39z" fill="#F5F3ED"/>
+  </g>
+  <g id="wordmark" fill="#201F1B">
+    <text x="350" y="137" font-family="Songti SC, Noto Serif CJK SC, serif" font-size="70" font-weight="600" letter-spacing="8">留幅</text>
+    <text x="353" y="190" font-family="Helvetica Neue, Arial, sans-serif" font-size="23" font-weight="600" letter-spacing="7">STILLFOLIO</text>
+  </g>
+</svg>

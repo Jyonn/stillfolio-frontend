@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" role="img" aria-labelledby="title desc">
+  <title id="title">留幅 STILLFOLIO — LF 字母印记</title>
+  <desc id="desc">将 L 与 F 压缩进四比三画幅，形成适合应用图标和水印的字母印记。</desc>
+  <g id="mark" transform="translate(56 58)">
+    <rect width="272" height="204" fill="#201F1B"/>
+    <path d="M43 38h32v96h61v32H43z" fill="#F5F3ED"/>
+    <path d="M151 38h87v31h-55v22h47v30h-47v45h-32z" fill="#F5F3ED"/>
+    <rect x="252" y="0" width="20" height="204" fill="#B24B3E"/>
+  </g>
+  <g id="wordmark" fill="#201F1B">
+    <text x="370" y="137" font-family="Songti SC, Noto Serif CJK SC, serif" font-size="70" font-weight="600" letter-spacing="8">留幅</text>
+    <text x="373" y="190" font-family="Helvetica Neue, Arial, sans-serif" font-size="23" font-weight="600" letter-spacing="7">STILLFOLIO</text>
+  </g>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" role="img" aria-labelledby="title desc">
+  <title id="title">留幅 STILLFOLIO — 开放画框</title>
+  <desc id="desc">以未闭合的画框和一幅悬浮照片表达留白与未完待续的作品集。</desc>
+  <g id="mark" transform="translate(70 58)">
+    <path d="M0 0h204v44H44v160H0z" fill="#201F1B"/>
+    <path d="M204 204H54v-44h106V54h44z" fill="#A59D8D"/>
+    <rect x="70" y="70" width="64" height="64" fill="#F5F3ED"/>
+  </g>
+  <g id="wordmark" fill="#201F1B">
+    <text x="350" y="137" font-family="Songti SC, Noto Serif CJK SC, serif" font-size="70" font-weight="600" letter-spacing="8">留幅</text>
+    <text x="353" y="190" font-family="Helvetica Neue, Arial, sans-serif" font-size="23" font-weight="600" letter-spacing="7">STILLFOLIO</text>
+  </g>
+</svg>

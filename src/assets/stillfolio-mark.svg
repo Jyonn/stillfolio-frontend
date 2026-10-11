@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">留幅 STILLFOLIO</title>
+  <desc id="desc">由取景框、地平线和坐标点组成的摄影作品集标志</desc>
+  <g id="icon" fill="none" stroke="#201F1B" stroke-width="28" stroke-linecap="square">
+    <path d="M42 166V42h124M346 42h124v124M470 346v124H346M166 470H42V346"/>
+    <path d="M105 329c83-119 157-132 222-67 45 45 80 39 101 9" stroke="#918979" stroke-width="22"/>
+    <circle cx="381" cy="174" r="30" fill="#201F1B" stroke="none"/>
+  </g>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" role="img" aria-labelledby="title desc">
+  <title id="title">留幅 STILLFOLIO — 坐标取景器</title>
+  <desc id="desc">取景框、地平线与坐标点组合成轻盈的摄影工具标志。</desc>
+  <g id="mark" transform="translate(62 50)" fill="none" stroke="#201F1B" stroke-width="12" stroke-linecap="square">
+    <path d="M0 66V0h66M154 0h66v66M220 154v66h-66M66 220H0v-66"/>
+    <path d="M36 144c38-54 71-61 101-31 21 21 37 18 47 4" stroke="#918979" stroke-width="8"/>
+    <circle cx="163" cy="70" r="13" fill="#201F1B" stroke="none"/>
+  </g>
+  <g id="wordmark" fill="#201F1B">
+    <text x="350" y="137" font-family="Songti SC, Noto Serif CJK SC, serif" font-size="70" font-weight="600" letter-spacing="8">留幅</text>
+    <text x="353" y="190" font-family="Helvetica Neue, Arial, sans-serif" font-size="23" font-weight="600" letter-spacing="7">STILLFOLIO</text>
+  </g>
+</svg>

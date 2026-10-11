@@ -1,0 +1,14 @@
+:root { color: #25231f; background: #ddd9cf; font-family: "Noto Sans SC", "PingFang SC", sans-serif; }
+* { box-sizing: border-box; }
+body { min-height: 100vh; margin: 0; padding: clamp(1rem, 5vw, 4rem); }
+main { width: min(48rem, 100%); margin: 0 auto; border: 1px solid #c5bfb3; padding: clamp(1.4rem, 6vw, 4rem); background: #f3f0e8; }
+.back { color: #777168; font-size: .72rem; text-decoration: none; }
+.eyebrow { margin: clamp(3rem, 10vw, 6rem) 0 .8rem; color: #918b82; font-size: .62rem; letter-spacing: .18em; }
+h1 { margin: 0; font-family: "Noto Serif SC", "Songti SC", serif; font-size: clamp(2rem, 7vw, 3.6rem); font-weight: 500; letter-spacing: -.05em; }
+.lead { max-width: 32rem; margin: 1rem 0 3rem; color: #777168; font-size: .82rem; line-height: 1.8; }
+ol { margin: 0; padding: 0; list-style: none; border-top: 1px solid #cbc5ba; }
+li { display: grid; grid-template-columns: 3rem 1fr; gap: 1rem; border-bottom: 1px solid #cbc5ba; padding: 1.4rem 0; }
+li > span { color: #aaa49a; font-size: .62rem; letter-spacing: .12em; }
+h2 { margin: 0; font-family: "Noto Serif SC", "Songti SC", serif; font-size: 1rem; font-weight: 500; }
+li p { margin: .45rem 0 0; color: #777168; font-size: .72rem; line-height: 1.7; }
+.external { display: inline-block; margin-top: 2rem; border: 1px solid #25231f; padding: .8rem 1rem; color: inherit; font-size: .68rem; text-decoration: none; }
