@@ -20,7 +20,10 @@ app.innerHTML = `
     <section class="mobile-library" aria-label="作品集首页">
       <header class="mobile-library-header">
         <a href="/" aria-label="留幅 STILLFOLIO 首页"><img src="${brandLogoUrl}" alt="留幅 STILLFOLIO"></a>
-        <button class="mobile-user-menu avatar-sprite" type="button" aria-label="用户设置" title="用户设置"></button>
+        <button class="mobile-user-profile user-profile-trigger" type="button" aria-label="打开用户设置">
+          <span class="mobile-user-menu user-avatar avatar-sprite" aria-hidden="true"></span>
+          <span class="user-profile-copy"><strong class="profile-nickname">JYONN</strong><small class="profile-tier">本地用户</small></span>
+        </button>
       </header>
       <div class="mobile-library-title"><p>PHOTO FOLIOS</p><h1>作品集</h1></div>
       <div class="mobile-collection-list" role="listbox" aria-label="选择作品集"></div>
@@ -115,10 +118,10 @@ app.innerHTML = `
           <div class="collection-actions"><button class="collection-new" type="button">＋ 新建作品集</button></div>
         </div>
       </div>
-      <div class="rail-user">
-        <button class="user-menu avatar-sprite" type="button" aria-label="用户设置" title="用户设置"></button>
-        <button class="rail-user-copy" type="button" tabindex="-1" aria-hidden="true"><strong class="profile-nickname">JYONN</strong><small>PHOTOGRAPHER</small></button>
-      </div>
+      <button class="rail-user user-profile-trigger" type="button" aria-label="打开用户设置">
+        <span class="user-menu user-avatar avatar-sprite" aria-hidden="true"></span>
+        <span class="rail-user-copy"><strong class="profile-nickname">JYONN</strong><small class="profile-tier">本地用户</small></span>
+      </button>
       <input class="picker" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden />
     </aside>
   </main>
@@ -180,16 +183,39 @@ app.innerHTML = `
       </header>
       <div class="user-settings">
         <div class="user-settings-home">
+          <div class="account-summary">
+            <span class="account-summary-index">ACCOUNT</span>
+            <div><strong class="profile-tier">本地用户</strong><small class="account-summary-copy">资料与作品集仅保存在当前设备</small></div>
+          </div>
+          <button class="user-settings-entry account-entry" type="button" data-user-panel="account">
+            <span>01</span><span><strong>连接云端账户</strong><small>创建新账户，或绑定已有账户</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+          </button>
           <button class="user-settings-entry" type="button" data-user-panel="avatar">
-            <span>01</span><span><strong>更换头像</strong><small>当前头像与 36 个可选身份</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+            <span>02</span><span><strong>更换头像</strong><small>当前头像与 36 个可选身份</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
           <button class="user-settings-entry" type="button" data-user-panel="geo">
-            <span>02</span><span><strong>地理解析服务</strong><small>高德与 OpenCage 服务 Key</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+            <span>03</span><span><strong>地理解析服务</strong><small>高德与 OpenCage 服务 Key</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
           <button class="user-settings-entry" type="button" data-user-panel="logo">
-            <span>03</span><span><strong>自定义 LOGO</strong><small>添加并管理本地 LOGO</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+            <span>04</span><span><strong>自定义 LOGO</strong><small>添加并管理本地 LOGO</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
         </div>
+        <section class="user-subpanel account-setting" data-user-view="account" hidden>
+          <button class="user-panel-back" type="button" data-user-back><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg><span>账户与云端</span></button>
+          <div class="account-choice-list">
+            <button type="button" data-account-path="create"><span><strong>创建云端账户</strong><small>使用当前昵称和头像，通过手机号完成认证</small></span><em>新用户</em></button>
+            <button type="button" data-account-path="bind"><span><strong>绑定已有账户</strong><small>登录后保留本地内容，由你决定哪些作品集上传</small></span><em>已有账户</em></button>
+          </div>
+          <div class="account-guide" hidden>
+            <button class="account-guide-back" type="button" data-account-guide-back>← 返回选择</button>
+            <p class="eyebrow">Cloud account</p>
+            <h3 class="account-guide-title"></h3>
+            <p class="account-guide-lead"></p>
+            <ol class="account-guide-steps"></ol>
+            <button class="account-auth-start" type="button">开始手机号认证</button>
+            <p class="account-service-note" hidden>手机号认证接口将在下一阶段接入；当前本地资料不会被修改或上传。</p>
+          </div>
+        </section>
         <section class="user-subpanel avatar-setting" data-user-view="avatar" hidden>
           <div class="avatar-panel-heading">
             <button class="user-panel-back" type="button" data-user-back><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg><span>更换头像</span></button>
@@ -391,9 +417,60 @@ function showUserPanel(name = '') {
   });
 }
 
+function isCloudUser() {
+  try {
+    return Boolean(JSON.parse(localStorage.getItem('stillfolio-cloud-user-v1'))?.id);
+  } catch {
+    return false;
+  }
+}
+
+function renderUserIdentity() {
+  const cloud = isCloudUser();
+  document.querySelectorAll('.profile-tier').forEach(node => { node.textContent = cloud ? '云端用户' : '本地用户'; });
+  const summary = document.querySelector('.account-summary-copy');
+  if (summary) summary.textContent = cloud ? '账户已连接，云端作品集可跨设备访问' : '资料与作品集仅保存在当前设备';
+  const entry = document.querySelector('.account-entry');
+  if (entry) entry.hidden = cloud;
+}
+
+const accountGuides = {
+  create: {
+    title: '创建云端账户',
+    lead: '沿用当前昵称与头像，通过中国大陆手机号建立唯一账户。注册不会自动上传任何本地照片。',
+    steps: ['验证手机号', '确认昵称与头像', '获得 50 次云端位置解析', '自行选择要升级到云端的作品集'],
+  },
+  bind: {
+    title: '绑定已有账户',
+    lead: '登录已有账户后，本机资料与云端资料会并列保留，不会覆盖或自动合并。',
+    steps: ['验证已注册手机号', '确认云端账户身份', '保留当前本地作品集', '自行选择是否把本地作品集升级到云端'],
+  },
+};
+
+function showAccountGuide(path) {
+  const guide = accountGuides[path];
+  if (!guide) return;
+  document.querySelector('.account-setting').classList.add('guide-open');
+  document.querySelector('.account-choice-list').hidden = true;
+  const panel = document.querySelector('.account-guide');
+  panel.hidden = false;
+  panel.querySelector('.account-guide-title').textContent = guide.title;
+  panel.querySelector('.account-guide-lead').textContent = guide.lead;
+  panel.querySelector('.account-guide-steps').innerHTML = guide.steps.map((step, index) => `<li><span>${String(index + 1).padStart(2, '0')}</span><p>${step}</p></li>`).join('');
+  panel.querySelector('.account-service-note').hidden = true;
+}
+
+function resetAccountGuide() {
+  document.querySelector('.account-setting').classList.remove('guide-open');
+  document.querySelector('.account-choice-list').hidden = false;
+  document.querySelector('.account-guide').hidden = true;
+}
+
 function openUserModal() {
   renderAvatars();
   renderLogoLibrary();
+  renderUserIdentity();
+  resetAccountGuide();
   showUserPanel();
   el['user-modal'].classList.add('open');
   el['user-modal'].setAttribute('aria-hidden', 'false');
@@ -407,6 +484,7 @@ function closeUserModal() {
 }
 
 renderAvatars();
+renderUserIdentity();
 
 const onboarding = document.querySelector('.onboarding');
 const onboardingCard = document.querySelector('.onboarding-card');
@@ -496,15 +574,20 @@ const localProfile = localRepositories.profile.load();
 if (localProfile) applyLocalProfile(localProfile);
 else openOnboarding();
 
-el['user-menu'].addEventListener('click', openUserModal);
-el['mobile-user-menu'].addEventListener('click', openUserModal);
+document.querySelectorAll('.user-profile-trigger').forEach(trigger => trigger.addEventListener('click', openUserModal));
 el['user-modal-close'].addEventListener('click', closeUserModal);
 el['user-done'].addEventListener('click', closeUserModal);
 document.querySelector('.user-modal-backdrop').addEventListener('click', closeUserModal);
 document.querySelector('.user-settings').addEventListener('click', event => {
   const entry = event.target.closest('[data-user-panel]');
   const back = event.target.closest('[data-user-back]');
+  const accountPath = event.target.closest('[data-account-path]');
+  const accountGuideBack = event.target.closest('[data-account-guide-back]');
+  const authStart = event.target.closest('.account-auth-start');
   if (entry) showUserPanel(entry.dataset.userPanel);
+  else if (accountPath) showAccountGuide(accountPath.dataset.accountPath);
+  else if (accountGuideBack) resetAccountGuide();
+  else if (authStart) document.querySelector('.account-service-note').hidden = false;
   else if (back) showUserPanel();
 });
 el['avatar-grid'].addEventListener('click', event => {
