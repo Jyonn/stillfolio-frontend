@@ -30,6 +30,10 @@ class CloudSyncRepository {
     });
   }
 
+  shareCollection(collectionId) {
+    return cloudAccountRepository.request(`/sync/collections/${collectionId}/share`, { method: 'POST' });
+  }
+
   uploadPhoto(collectionId, photo) {
     const body = new FormData();
     body.append('source_id', photo.id);

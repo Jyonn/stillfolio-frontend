@@ -7,6 +7,7 @@ import { applyCropVariables, applyInlineCrop, clearCropVariables, cropLayout, ne
 import { createWindowedCarousel } from './carousel.js';
 import { cloneDisplaySettings, DEFAULT_DISPLAY_SETTINGS, PROPERTY_LABELS, SLOT_KEYS, slotData } from './display-settings.js';
 import brandLogoUrl from './assets/stillfolio-logo.svg?url';
+import QRCode from 'qrcode';
 
 const logoUrl = brandLogoUrl;
 
@@ -116,17 +117,16 @@ app.innerHTML = `
         <button class="collection-sync icon-button secondary-icon" type="button" aria-label="同步当前作品集" title="同步当前作品集">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 18h10.1a4.2 4.2 0 0 0 .7-8.3A6.1 6.1 0 0 0 6.5 8.2 4.9 4.9 0 0 0 7.2 18Z"/><path d="m9 13 3-3 3 3M12 10v6"/></svg>
         </button>
+        <button class="collection-share icon-button secondary-icon" type="button" aria-label="分享当前作品集" title="分享当前作品集" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="2.2"/><circle cx="17" cy="6" r="2.2"/><circle cx="17" cy="18" r="2.2"/><path d="m9 11 6-3.7M9 13l6 3.7"/></svg>
+        </button>
         <div class="export-split">
-          <button class="export-run" type="button" aria-label="执行导出" title="执行导出" disabled>
+          <button class="export-run" type="button" aria-label="导出照片" title="导出照片" aria-haspopup="menu" aria-expanded="false" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0 4.5-4.5M12 16l-4.5-4.5M5 20h14"/></svg>
           </button>
-          <button class="export-choice" type="button" aria-haspopup="listbox" aria-expanded="false" disabled>
-            <span class="export-label">当前 PNG</span>
-            <svg class="chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
-          </button>
-          <div class="export-menu" role="listbox" aria-hidden="true">
-            <button class="export-option active" type="button" role="option" aria-selected="true" data-export="current">当前照片 · PNG</button>
-            <button class="export-option" type="button" role="option" aria-selected="false" data-export="all">全部照片 · ZIP</button>
+          <div class="export-menu" role="menu" aria-hidden="true">
+            <button class="export-option" type="button" role="menuitem" data-export="current"><span>当前照片</span><small>PNG</small></button>
+            <button class="export-option" type="button" role="menuitem" data-export="all"><span>全部照片</span><small>ZIP</small></button>
           </div>
         </div>
       </div>
@@ -294,9 +294,19 @@ app.innerHTML = `
       <p id="sync-confirm-copy">同步后，这个作品集会永久设为云端作品集，无法再改回仅本地存储。</p>
       <div class="delete-dialog-actions"><button class="sync-confirm-cancel" type="button">取消</button><button class="sync-confirm-submit" type="button">确认同步</button></div>
     </section>
+  </div>
+  <div class="share-modal" aria-hidden="true">
+    <div class="share-modal-backdrop"></div>
+    <section class="share-dialog" role="dialog" aria-modal="true" aria-labelledby="share-dialog-title">
+      <header><div><p class="eyebrow">Share portfolio</p><h2 id="share-dialog-title">分享作品集</h2></div><button class="share-modal-close" type="button" aria-label="关闭">×</button></header>
+      <div class="share-content">
+        <canvas class="share-qr" width="220" height="220" aria-label="作品集分享二维码"></canvas>
+        <div class="share-copy"><strong class="share-collection-name"></strong><p>扫码或复制链接，即可打开只读作品集。</p><div class="share-link-row"><input class="share-link" type="text" readonly aria-label="分享链接"><button class="share-copy-button" type="button">复制链接</button></div></div>
+      </div>
+    </section>
   </div>`;
 
-const el = Object.fromEntries(['photo','empty','place','coordinates','meta','picker','select','customize','collection-sync','photo-sync','user-menu','mobile-user-menu','mobile-library-back','mobile-collection-list','mobile-collection-new','carousel-viewport','carousel-track','folio-nav','technical','export-run','export-choice','export-label','export-menu','delete-current','canvas-lock','canvas-info','canvas-info-panel','canvas-info-close','canvas-sync-panel','canvas-sync-close','sync-status-body','amap-key','opencage-key','service-key-amap','service-key-opencage','crop-hint','crop-mode-control','display-modal','display-settings-list','display-modal-close','display-cancel','display-apply','user-modal','user-modal-close','user-settings-home','avatar-grid','current-avatar-upload','custom-avatar-input','custom-logo-upload','custom-logo-input','logo-library','user-done','info-modal','info-modal-close','info-form','delete-modal','delete-modal-cancel','delete-modal-confirm','sync-confirm-modal','sync-confirm-cancel','sync-confirm-submit','collection-modal','collection-edit','collection-trigger','collection-name','workspace-collection-name','collection-menu','collection-list','collection-form','collection-input','collection-form-cancel','collection-new'].map(c => [c, document.querySelector(`.${c}`)]));
+const el = Object.fromEntries(['photo','empty','place','coordinates','meta','picker','select','customize','collection-sync','collection-share','photo-sync','user-menu','mobile-user-menu','mobile-library-back','mobile-collection-list','mobile-collection-new','carousel-viewport','carousel-track','folio-nav','technical','export-run','export-menu','delete-current','canvas-lock','canvas-info','canvas-info-panel','canvas-info-close','canvas-sync-panel','canvas-sync-close','sync-status-body','amap-key','opencage-key','service-key-amap','service-key-opencage','crop-hint','crop-mode-control','display-modal','display-settings-list','display-modal-close','display-cancel','display-apply','user-modal','user-modal-close','user-settings-home','avatar-grid','current-avatar-upload','custom-avatar-input','custom-logo-upload','custom-logo-input','logo-library','user-done','info-modal','info-modal-close','info-form','delete-modal','delete-modal-cancel','delete-modal-confirm','sync-confirm-modal','sync-confirm-cancel','sync-confirm-submit','share-modal','share-modal-close','share-qr','share-link','share-copy-button','collection-modal','collection-edit','collection-trigger','collection-name','workspace-collection-name','collection-menu','collection-list','collection-form','collection-input','collection-form-cancel','collection-new'].map(c => [c, document.querySelector(`.${c}`)]));
 let { collections, activeId: activeCollectionId } = loadCollections(DEFAULT_DISPLAY_SETTINGS);
 let displaySettings = cloneDisplaySettings(collections.find(item => item.id === activeCollectionId)?.settings || DEFAULT_DISPLAY_SETTINGS);
 saveCollections(collections, activeCollectionId);
@@ -493,6 +503,7 @@ function renderSyncStatus() {
   el['collection-sync'].classList.toggle('sync-error', collectionTask?.phase === 'error');
   el['collection-sync'].classList.toggle('synced', collection?.storageMode === 'cloud' && collectionTask?.phase !== 'error');
   el['collection-sync'].title = collection?.storageMode === 'cloud' ? '同步云端作品集' : '将作品集同步到云端';
+  el['collection-share'].hidden = collection?.storageMode !== 'cloud';
   if (!cloudUser) {
     el['sync-status-body'].innerHTML = '<p class="sync-empty">连接云端账户后，可自动同步 LOGO，并手动同步作品集。</p>';
     return;
@@ -752,6 +763,39 @@ el['sync-confirm-submit'].addEventListener('click', () => {
   const collectionId = el['sync-confirm-modal'].dataset.collectionId || activeCollectionId;
   closeSyncConfirmation();
   syncCollectionToCloud(collectionId);
+});
+
+function closeShareModal() {
+  el['share-modal'].classList.remove('open');
+  el['share-modal'].setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
+}
+
+el['collection-share'].addEventListener('click', async () => {
+  const collection = activeCollection();
+  if (!cloudUser || !collection?.cloudId) return;
+  el['collection-share'].disabled = true;
+  try {
+    const share = await cloudSyncRepository.shareCollection(collection.cloudId);
+    const url = new URL(share.path, window.location.origin).href;
+    document.querySelector('.share-collection-name').textContent = collection.name;
+    el['share-link'].value = url;
+    await QRCode.toCanvas(el['share-qr'], url, { width: 220, margin: 1, color: { dark: '#201f1b', light: '#f5f3ed' } });
+    el['share-modal'].classList.add('open');
+    el['share-modal'].setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+  } catch (error) {
+    setSyncTask(`collection:${collection.id}`, { kind: 'collection', phase: 'error', error: error.message });
+  } finally {
+    el['collection-share'].disabled = false;
+  }
+});
+el['share-modal-close'].addEventListener('click', closeShareModal);
+document.querySelector('.share-modal-backdrop').addEventListener('click', closeShareModal);
+el['share-copy-button'].addEventListener('click', async () => {
+  await navigator.clipboard.writeText(el['share-link'].value);
+  el['share-copy-button'].textContent = '已复制';
+  setTimeout(() => { el['share-copy-button'].textContent = '复制链接'; }, 1400);
 });
 
 function openUserModal() {
@@ -1903,7 +1947,6 @@ function show(index, { deferRender = false } = {}) {
   el.meta.innerHTML = metaRows(item);
   renderFolioNav();
   el['export-run'].disabled = false;
-  el['export-choice'].disabled = false;
   el['delete-current'].disabled = false;
   el['canvas-lock'].disabled = false;
   el['canvas-info'].disabled = false;
@@ -2187,7 +2230,6 @@ function showEmpty() {
   el['folio-nav'].hidden = false;
   el['folio-nav'].innerHTML = '<button class="folio-segment empty-segment" type="button" aria-label="空白照片位置" disabled></button>';
   el['export-run'].disabled = true;
-  el['export-choice'].disabled = true;
   el['delete-current'].disabled = true;
   el['canvas-lock'].disabled = true;
   el['canvas-info'].disabled = true;
@@ -2511,27 +2553,37 @@ function zipFiles(files) {
 }
 
 function safeName(name) { return name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '_'); }
-let exportMode = 'current';
 let exportBusy = false;
 
 function setExportMenu(open) {
   el['export-menu'].classList.toggle('open', open);
   el['export-menu'].setAttribute('aria-hidden', String(!open));
-  el['export-choice'].setAttribute('aria-expanded', String(open));
+  el['export-run'].setAttribute('aria-expanded', String(open));
 }
 
-el['export-choice'].addEventListener('click', () => setExportMenu(!el['export-menu'].classList.contains('open')));
-el['export-menu'].addEventListener('click', event => {
+el['export-run'].addEventListener('click', () => {
+  if (!exportBusy) setExportMenu(!el['export-menu'].classList.contains('open'));
+});
+el['export-menu'].addEventListener('click', async event => {
   const option = event.target.closest('.export-option');
   if (!option) return;
-  exportMode = option.dataset.export;
-  el['export-label'].textContent = exportMode === 'current' ? '当前 PNG' : '全部 ZIP';
-  document.querySelectorAll('.export-option').forEach(button => {
-    const selected = button === option;
-    button.classList.toggle('active', selected);
-    button.setAttribute('aria-selected', String(selected));
-  });
   setExportMenu(false);
+  if (exportBusy || !photos.length) return;
+  exportBusy = true;
+  el['export-run'].disabled = true;
+  el['export-run'].classList.add('busy');
+  try {
+    if (option.dataset.export === 'current') await exportCurrentPhoto();
+    else await exportAllPhotos();
+  } catch (error) {
+    console.error(error);
+    el['export-run'].classList.add('failed');
+    setTimeout(() => el['export-run'].classList.remove('failed'), 1400);
+  } finally {
+    exportBusy = false;
+    el['export-run'].disabled = false;
+    el['export-run'].classList.remove('busy');
+  }
 });
 document.addEventListener('click', event => {
   if (!event.target.closest('.export-split')) setExportMenu(false);
@@ -2551,34 +2603,11 @@ async function exportAllPhotos() {
   if (!photos.length) return;
   const files = [];
   for (let i = 0; i < photos.length; i++) {
-    el['export-label'].textContent = `${i + 1} / ${photos.length}`;
     const blob = await renderExport(photos[i], i);
     files.push({ name: `${String(i + 1).padStart(2, '0')}-${safeName(photos[i].file.name)}.png`, data: new Uint8Array(await blob.arrayBuffer()) });
   }
   downloadBlob(zipFiles(files), 'jyonn-photo-archive.zip');
 }
-
-el['export-run'].addEventListener('click', async () => {
-  if (exportBusy || !photos.length) return;
-  exportBusy = true;
-  el['export-run'].disabled = true;
-  el['export-choice'].disabled = true;
-  const restingLabel = exportMode === 'current' ? '当前 PNG' : '全部 ZIP';
-  el['export-label'].textContent = '生成中…';
-  try {
-    if (exportMode === 'current') await exportCurrentPhoto();
-    else await exportAllPhotos();
-  } catch (error) {
-    console.error(error);
-    el['export-label'].textContent = '导出失败';
-    await new Promise(resolve => setTimeout(resolve, 1200));
-  } finally {
-    exportBusy = false;
-    el['export-run'].disabled = false;
-    el['export-choice'].disabled = false;
-    el['export-label'].textContent = restingLabel;
-  }
-});
 
 async function restoreArchive() {
   const revision = ++archiveLoadRevision;
