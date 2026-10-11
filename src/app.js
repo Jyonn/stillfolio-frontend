@@ -185,41 +185,27 @@ app.innerHTML = `
       <div class="user-settings">
         <div class="user-settings-home">
           <div class="account-summary">
-            <span class="account-summary-index">ACCOUNT</span>
+            <button class="profile-summary-avatar avatar-sprite" type="button" data-user-panel="avatar" aria-label="更换头像"></button>
             <div><strong class="profile-tier">本地用户</strong><small class="account-summary-copy">资料与作品集仅保存在当前设备</small><button class="account-logout" type="button" hidden>退出云端账户</button></div>
           </div>
           <button class="user-settings-entry account-entry" type="button" data-user-panel="account">
-            <span>01</span><span><strong>连接云端账户</strong><small>创建新账户，或绑定已有账户</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
-          </button>
-          <button class="user-settings-entry" type="button" data-user-panel="avatar">
-            <span>02</span><span><strong>更换头像</strong><small>当前头像与 36 个可选身份</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+            <span><strong>连接云端账户</strong><small>使用手机号认证，系统将自动创建或连接账户</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
           <button class="user-settings-entry" type="button" data-user-panel="geo">
-            <span>03</span><span><strong>地理解析服务</strong><small>高德与 OpenCage 服务 Key</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+            <span><strong>地理解析服务</strong><small>高德与 OpenCage 服务 Key</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
           <button class="user-settings-entry" type="button" data-user-panel="logo">
-            <span>04</span><span><strong>自定义 LOGO</strong><small>添加并管理本地 LOGO</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+            <span><strong>我的 LOGO</strong><small>添加并管理本地 LOGO</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
         </div>
         <section class="user-subpanel account-setting" data-user-view="account" hidden>
-          <button class="user-panel-back" type="button" data-user-back><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg><span>账户与云端</span></button>
-          <div class="account-choice-list">
-            <button type="button" data-account-path="create"><span><strong>创建云端账户</strong><small>使用当前昵称和头像，通过手机号完成认证</small></span><em>新用户</em></button>
-            <button type="button" data-account-path="bind"><span><strong>绑定已有账户</strong><small>登录后保留本地内容，由你决定哪些作品集上传</small></span><em>已有账户</em></button>
-          </div>
-          <div class="account-guide" hidden>
-            <button class="account-guide-back" type="button" data-account-guide-back>← 返回选择</button>
-            <p class="eyebrow">Cloud account</p>
-            <h3 class="account-guide-title"></h3>
-            <p class="account-guide-lead"></p>
-            <ol class="account-guide-steps"></ol>
-            <form class="account-auth-form">
-              <label><span>中国大陆手机号</span><input class="account-phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="请输入 11 位手机号" maxlength="13" required></label>
-              <label><span>短信验证码</span><span class="account-code-row"><input class="account-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码" maxlength="6" required><button class="account-send-code" type="button">获取验证码</button></span></label>
-              <p class="account-service-note" role="status" hidden></p>
-              <button class="account-auth-start" type="submit">确认并连接云端</button>
-            </form>
-          </div>
+          <button class="user-panel-back" type="button" data-user-back><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg><span>连接云端账户</span></button>
+          <form class="account-auth-form">
+            <label><span>手机号</span><input class="account-phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="请输入中国大陆手机号" maxlength="13" required></label>
+            <label><span>验证码</span><span class="account-code-row"><input class="account-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码" maxlength="6" required><button class="account-send-code" type="button">获取验证码</button></span></label>
+            <p class="account-service-note" role="status" hidden></p>
+            <button class="account-auth-start" type="submit">连接云端</button>
+          </form>
         </section>
         <section class="user-subpanel avatar-setting" data-user-view="avatar" hidden>
           <div class="avatar-panel-heading">
@@ -247,11 +233,11 @@ app.innerHTML = `
         </section>
         <section class="user-subpanel logo-setting" data-user-view="logo" hidden>
           <div class="logo-panel-heading">
-            <button class="user-panel-back" type="button" data-user-back><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg><span>自定义 LOGO</span></button>
+            <button class="user-panel-back" type="button" data-user-back><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg><span>我的 LOGO</span></button>
             <button class="custom-logo-upload" type="button" aria-label="上传 LOGO" title="上传 LOGO"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10v12H4zM6.5 15l2.8-3 2.1 2 2.6-3M8 9.5h.01M18 5v6M15 8h6"/></svg></button>
           </div>
           <input class="custom-logo-input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple hidden>
-          <div class="logo-library" aria-label="自定义 LOGO 库"></div>
+          <div class="logo-library" aria-label="我的 LOGO"></div>
         </section>
       </div>
       <footer class="user-dialog-footer"><button class="user-done" type="button">完成</button></footer>
@@ -390,7 +376,7 @@ function avatarPosition(target, index) {
 
 function renderAvatars() {
   const useCustom = localStorage.getItem('custom-avatar-enabled') === 'true' && customAvatarUrl;
-  [el['user-menu'], el['mobile-user-menu'], el['current-avatar-upload']].forEach(target => {
+  [el['user-menu'], el['mobile-user-menu'], el['current-avatar-upload'], document.querySelector('.profile-summary-avatar')].forEach(target => {
     target.classList.toggle('avatar-sprite', !useCustom);
     target.classList.toggle('custom-avatar', Boolean(useCustom));
     target.style.backgroundImage = useCustom ? `url("${customAvatarUrl}")` : '';
@@ -409,10 +395,10 @@ function selectedLogoUrl(settings = displaySettings) {
 function renderLogoLibrary() {
   el['logo-library'].innerHTML = customLogos.length
     ? customLogos.map((logo, index) => `<div class="logo-library-item">
-        <img src="${logo.url}" alt="自定义 LOGO ${index + 1}">
-        <button type="button" data-remove-logo="${logo.id}" aria-label="删除自定义 LOGO ${index + 1}">×</button>
+        <img src="${logo.url}" alt="我的 LOGO ${index + 1}">
+        <button type="button" data-remove-logo="${logo.id}" aria-label="删除 LOGO ${index + 1}">×</button>
       </div>`).join('')
-    : '<p class="logo-library-empty">尚未添加自定义 LOGO</p>';
+    : '<p class="logo-library-empty">尚未添加 LOGO</p>';
 }
 
 function showUserPanel(name = '') {
@@ -423,7 +409,6 @@ function showUserPanel(name = '') {
 }
 
 let cloudUser = null;
-let accountAuthMode = 'create';
 let codeCooldownTimer = null;
 
 function renderUserIdentity() {
@@ -440,46 +425,10 @@ function renderUserIdentity() {
   if (logout) logout.hidden = !cloud;
 }
 
-const accountGuides = {
-  create: {
-    title: '创建云端账户',
-    lead: '沿用当前昵称与头像，通过中国大陆手机号建立唯一账户。注册不会自动上传任何本地照片。',
-    steps: ['验证手机号', '确认昵称与头像', '获得 50 次云端位置解析', '自行选择要升级到云端的作品集'],
-  },
-  bind: {
-    title: '绑定已有账户',
-    lead: '登录已有账户后，本机资料与云端资料会并列保留，不会覆盖或自动合并。',
-    steps: ['验证已注册手机号', '确认云端账户身份', '保留当前本地作品集', '自行选择是否把本地作品集升级到云端'],
-  },
-};
-
-function showAccountGuide(path) {
-  const guide = accountGuides[path];
-  if (!guide) return;
-  accountAuthMode = path;
-  document.querySelector('.account-setting').classList.add('guide-open');
-  document.querySelector('.account-choice-list').hidden = true;
-  const panel = document.querySelector('.account-guide');
-  panel.hidden = false;
-  panel.querySelector('.account-guide-title').textContent = guide.title;
-  panel.querySelector('.account-guide-lead').textContent = guide.lead;
-  panel.querySelector('.account-guide-steps').innerHTML = guide.steps.map((step, index) => `<li><span>${String(index + 1).padStart(2, '0')}</span><p>${step}</p></li>`).join('');
-  panel.querySelector('.account-auth-form').reset();
-  panel.querySelector('.account-service-note').hidden = true;
-  panel.querySelector('.account-auth-start').textContent = path === 'create' ? '创建并连接云端' : '登录并绑定账户';
-}
-
-function resetAccountGuide() {
-  document.querySelector('.account-setting').classList.remove('guide-open');
-  document.querySelector('.account-choice-list').hidden = false;
-  document.querySelector('.account-guide').hidden = true;
-}
-
 function openUserModal() {
   renderAvatars();
   renderLogoLibrary();
   renderUserIdentity();
-  resetAccountGuide();
   showUserPanel();
   el['user-modal'].classList.add('open');
   el['user-modal'].setAttribute('aria-hidden', 'false');
@@ -595,11 +544,7 @@ document.querySelector('.user-modal-backdrop').addEventListener('click', closeUs
 document.querySelector('.user-settings').addEventListener('click', event => {
   const entry = event.target.closest('[data-user-panel]');
   const back = event.target.closest('[data-user-back]');
-  const accountPath = event.target.closest('[data-account-path]');
-  const accountGuideBack = event.target.closest('[data-account-guide-back]');
   if (entry) showUserPanel(entry.dataset.userPanel);
-  else if (accountPath) showAccountGuide(accountPath.dataset.accountPath);
-  else if (accountGuideBack) resetAccountGuide();
   else if (back) showUserPanel();
 });
 
@@ -616,7 +561,7 @@ document.querySelector('.account-send-code').addEventListener('click', async eve
   if (!phone) return showAccountMessage('请先输入手机号', true);
   button.disabled = true;
   try {
-    const data = await cloudAccountRepository.sendCode(phone, accountAuthMode === 'create' ? 'register' : 'bind');
+    const data = await cloudAccountRepository.sendCode(phone, 'register');
     if (data.debug_code) document.querySelector('.account-code').value = data.debug_code;
     showAccountMessage(data.debug_code ? '开发模式验证码已自动填入' : '验证码已发送，请查看短信');
     let remaining = Number(data.retry_after || 60);
@@ -644,7 +589,7 @@ document.querySelector('.account-auth-form').addEventListener('submit', async ev
     cloudUser = await cloudAccountRepository.verify({
       phone: document.querySelector('.account-phone').value.trim(),
       code: document.querySelector('.account-code').value.trim(),
-      scene: accountAuthMode === 'create' ? 'register' : 'bind',
+      scene: 'register',
       profile: localRepositories.profile.load(),
     });
     renderUserIdentity();
