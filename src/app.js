@@ -17,15 +17,23 @@ let archiveLoadRevision = 0;
 let collectionCoverRevision = 0;
 let collectionCoverUrls = [];
 
+function cloudIconMarkup() {
+  return `<svg class="sync-cloud-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 18h10.1a4.2 4.2 0 0 0 .7-8.3A6.1 6.1 0 0 0 6.5 8.2 4.9 4.9 0 0 0 7.2 18Z"/></svg>
+    <svg class="sync-spinner-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M17 3.8h3.2V7"/></svg>`;
+}
+
 app.innerHTML = `
   <main class="shell">
     <section class="mobile-library" aria-label="作品集首页">
       <header class="mobile-library-header">
         <a href="/" aria-label="留幅 STILLFOLIO 首页"><img src="${brandLogoUrl}" alt="留幅 STILLFOLIO"></a>
-        <button class="mobile-user-profile user-profile-trigger" type="button" aria-label="打开用户设置">
-          <span class="mobile-user-menu user-avatar avatar-sprite" aria-hidden="true"></span>
-          <span class="user-profile-copy"><strong class="profile-nickname">JYONN</strong><small class="profile-tier">本地用户</small></span>
-        </button>
+        <div class="mobile-account-controls">
+          <button class="global-sync global-sync-mobile" type="button" aria-label="查看云端同步状态" title="云端同步状态" aria-expanded="false">${cloudIconMarkup()}</button>
+          <button class="mobile-user-profile user-profile-trigger" type="button" aria-label="打开用户设置">
+            <span class="mobile-user-menu user-avatar avatar-sprite" aria-hidden="true"></span>
+            <span class="user-profile-copy"><strong class="profile-nickname">JYONN</strong><small class="profile-tier">本地用户</small></span>
+          </button>
+        </div>
       </header>
       <div class="mobile-library-title"><p>PHOTO FOLIOS</p><h1>作品集</h1></div>
       <div class="mobile-collection-list" role="listbox" aria-label="选择作品集"></div>
@@ -78,9 +86,11 @@ app.innerHTML = `
       <button class="canvas-info" type="button" aria-label="查看照片信息" title="查看照片信息" aria-expanded="false" disabled>
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 10v6M12 7.5h.01"/></svg>
       </button>
-      <button class="canvas-sync" type="button" aria-label="查看同步状态" title="同步状态" aria-expanded="false">
-        <svg class="sync-cloud-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 18h10.1a4.2 4.2 0 0 0 .7-8.3A6.1 6.1 0 0 0 6.5 8.2 4.9 4.9 0 0 0 7.2 18Z"/></svg>
-        <svg class="sync-spinner-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M17 3.8h3.2V7"/></svg>
+      <button class="photo-sync" type="button" aria-label="当前照片同步状态" title="照片同步状态" hidden>
+        <svg class="photo-sync-cloud" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 18h10.1a4.2 4.2 0 0 0 .7-8.3A6.1 6.1 0 0 0 6.5 8.2 4.9 4.9 0 0 0 7.2 18Z"/></svg>
+        <svg class="photo-sync-state photo-sync-loading" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M17 3.8h3.2V7"/></svg>
+        <svg class="photo-sync-state photo-sync-success" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 12 2.6 2.6L16.5 9"/></svg>
+        <svg class="photo-sync-state photo-sync-failure" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5M12 16h.01"/></svg>
       </button>
       <aside class="canvas-info-panel" aria-hidden="true" aria-label="照片信息">
         <header><span>Photograph details</span><button class="canvas-info-close" type="button" aria-label="关闭照片信息">×</button></header>
@@ -102,6 +112,9 @@ app.innerHTML = `
         </button>
         <button class="customize icon-button secondary-icon" type="button" aria-label="自定义展示" title="自定义展示">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2m4 0h10M14 4v6M10 14v6"/></svg>
+        </button>
+        <button class="collection-sync icon-button secondary-icon" type="button" aria-label="同步当前作品集" title="同步当前作品集">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 18h10.1a4.2 4.2 0 0 0 .7-8.3A6.1 6.1 0 0 0 6.5 8.2 4.9 4.9 0 0 0 7.2 18Z"/><path d="m9 13 3-3 3 3M12 10v6"/></svg>
         </button>
         <div class="export-split">
           <button class="export-run" type="button" aria-label="执行导出" title="执行导出" disabled>
@@ -128,10 +141,13 @@ app.innerHTML = `
           <div class="collection-actions"><button class="collection-new" type="button">＋ 新建作品集</button></div>
         </div>
       </div>
-      <button class="rail-user user-profile-trigger" type="button" aria-label="打开用户设置">
-        <span class="user-menu user-avatar avatar-sprite" aria-hidden="true"></span>
-        <span class="rail-user-copy"><strong class="profile-nickname">JYONN</strong><small class="profile-tier">本地用户</small></span>
-      </button>
+      <div class="rail-account-row">
+        <button class="rail-user user-profile-trigger" type="button" aria-label="打开用户设置">
+          <span class="user-menu user-avatar avatar-sprite" aria-hidden="true"></span>
+          <span class="rail-user-copy"><strong class="profile-nickname">JYONN</strong><small class="profile-tier">本地用户</small></span>
+        </button>
+        <button class="global-sync global-sync-rail" type="button" aria-label="查看云端同步状态" title="云端同步状态" aria-expanded="false">${cloudIconMarkup()}</button>
+      </div>
       <input class="picker" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden />
     </aside>
   </main>
@@ -269,9 +285,18 @@ app.innerHTML = `
       <p id="delete-dialog-copy">照片及其编辑信息会从本地作品集中移除。</p>
       <div class="delete-dialog-actions"><button class="delete-modal-cancel" type="button">取消</button><button class="delete-modal-confirm" type="button">确认删除</button></div>
     </section>
+  </div>
+  <div class="sync-confirm-modal" aria-hidden="true">
+    <div class="sync-confirm-backdrop"></div>
+    <section class="delete-dialog sync-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="sync-confirm-title" aria-describedby="sync-confirm-copy">
+      <p class="eyebrow">Cloud collection</p>
+      <h2 id="sync-confirm-title">将作品集同步到云端？</h2>
+      <p id="sync-confirm-copy">同步后，这个作品集会永久设为云端作品集，无法再改回仅本地存储。</p>
+      <div class="delete-dialog-actions"><button class="sync-confirm-cancel" type="button">取消</button><button class="sync-confirm-submit" type="button">确认同步</button></div>
+    </section>
   </div>`;
 
-const el = Object.fromEntries(['photo','empty','place','coordinates','meta','picker','select','customize','user-menu','mobile-user-menu','mobile-library-back','mobile-collection-list','mobile-collection-new','carousel-viewport','carousel-track','folio-nav','technical','export-run','export-choice','export-label','export-menu','delete-current','canvas-lock','canvas-info','canvas-info-panel','canvas-info-close','canvas-sync','canvas-sync-panel','canvas-sync-close','sync-status-body','amap-key','opencage-key','service-key-amap','service-key-opencage','crop-hint','crop-mode-control','display-modal','display-settings-list','display-modal-close','display-cancel','display-apply','user-modal','user-modal-close','user-settings-home','avatar-grid','current-avatar-upload','custom-avatar-input','custom-logo-upload','custom-logo-input','logo-library','user-done','info-modal','info-modal-close','info-form','delete-modal','delete-modal-cancel','delete-modal-confirm','collection-modal','collection-edit','collection-trigger','collection-name','workspace-collection-name','collection-menu','collection-list','collection-form','collection-input','collection-form-cancel','collection-new'].map(c => [c, document.querySelector(`.${c}`)]));
+const el = Object.fromEntries(['photo','empty','place','coordinates','meta','picker','select','customize','collection-sync','photo-sync','user-menu','mobile-user-menu','mobile-library-back','mobile-collection-list','mobile-collection-new','carousel-viewport','carousel-track','folio-nav','technical','export-run','export-choice','export-label','export-menu','delete-current','canvas-lock','canvas-info','canvas-info-panel','canvas-info-close','canvas-sync-panel','canvas-sync-close','sync-status-body','amap-key','opencage-key','service-key-amap','service-key-opencage','crop-hint','crop-mode-control','display-modal','display-settings-list','display-modal-close','display-cancel','display-apply','user-modal','user-modal-close','user-settings-home','avatar-grid','current-avatar-upload','custom-avatar-input','custom-logo-upload','custom-logo-input','logo-library','user-done','info-modal','info-modal-close','info-form','delete-modal','delete-modal-cancel','delete-modal-confirm','sync-confirm-modal','sync-confirm-cancel','sync-confirm-submit','collection-modal','collection-edit','collection-trigger','collection-name','workspace-collection-name','collection-menu','collection-list','collection-form','collection-input','collection-form-cancel','collection-new'].map(c => [c, document.querySelector(`.${c}`)]));
 let { collections, activeId: activeCollectionId } = loadCollections(DEFAULT_DISPLAY_SETTINGS);
 let displaySettings = cloneDisplaySettings(collections.find(item => item.id === activeCollectionId)?.settings || DEFAULT_DISPLAY_SETTINGS);
 saveCollections(collections, activeCollectionId);
@@ -457,9 +482,17 @@ function taskProgress(task) {
 function renderSyncStatus() {
   const running = [...syncTasks.values()].some(task => task.phase === 'running');
   const failed = [...syncTasks.values()].some(task => task.phase === 'error');
-  el['canvas-sync'].classList.toggle('syncing', running);
-  el['canvas-sync'].classList.toggle('sync-error', failed);
-  el['canvas-sync'].title = running ? '正在同步' : failed ? '同步失败，点击查看' : '同步状态';
+  document.querySelectorAll('.global-sync').forEach(button => {
+    button.classList.toggle('syncing', running);
+    button.classList.toggle('sync-error', failed);
+    button.title = running ? '正在同步' : failed ? '同步失败，点击查看' : '云端同步状态';
+  });
+  const collection = activeCollection();
+  const collectionTask = collection && syncTasks.get(`collection:${collection.id}`);
+  el['collection-sync'].classList.toggle('syncing', collectionTask?.phase === 'running');
+  el['collection-sync'].classList.toggle('sync-error', collectionTask?.phase === 'error');
+  el['collection-sync'].classList.toggle('synced', collection?.storageMode === 'cloud' && collectionTask?.phase !== 'error');
+  el['collection-sync'].title = collection?.storageMode === 'cloud' ? '同步云端作品集' : '将作品集同步到云端';
   if (!cloudUser) {
     el['sync-status-body'].innerHTML = '<p class="sync-empty">连接云端账户后，可自动同步 LOGO，并手动同步作品集。</p>';
     return;
@@ -481,6 +514,17 @@ function renderSyncStatus() {
       ${logoTask?.phase === 'error' ? '<button type="button" data-sync-logos>重试</button>' : '<span>自动</span>'}
       ${logoTask?.phase === 'running' ? `<i style="--sync-progress:${Math.round((logoTask.current / Math.max(1, logoTask.total)) * 100)}%"></i>` : ''}
     </section>${collectionRows}`;
+}
+
+function renderPhotoSyncStatus(item = photos[current]) {
+  const cloudCollection = activeCollection()?.storageMode === 'cloud';
+  el['photo-sync'].hidden = !cloudCollection || !item;
+  if (!cloudCollection || !item) return;
+  const status = item.cloudSyncStatus || 'success';
+  el['photo-sync'].dataset.status = status;
+  const labels = { syncing: '当前照片正在同步', failed: '当前照片同步失败', success: '当前照片已同步' };
+  el['photo-sync'].title = labels[status] || labels.success;
+  el['photo-sync'].setAttribute('aria-label', el['photo-sync'].title);
 }
 
 async function syncLogos() {
@@ -527,8 +571,15 @@ async function syncCollectionToCloud(collectionId) {
   const collection = collections.find(item => item.id === collectionId);
   if (!collection) return;
   const key = `collection:${collection.id}`;
+  let activeRecord = null;
   try {
     const records = (await loadPhotos()).filter(photo => photo.collectionId === collection.id);
+    for (const record of records) {
+      record.cloudSyncStatus = 'syncing';
+      await savePhoto(record);
+    }
+    photos.filter(photo => photo.collectionId === collection.id).forEach(photo => { photo.cloudSyncStatus = 'syncing'; });
+    renderPhotoSyncStatus();
     setSyncTask(key, { kind: 'collection', phase: 'running', current: 0, total: records.length });
     const remote = await cloudSyncRepository.syncCollection(collection);
     collection.cloudId = remote.id;
@@ -536,10 +587,30 @@ async function syncCollectionToCloud(collectionId) {
     saveCollections(collections, activeCollectionId);
     for (let index = 0; index < records.length; index += 1) {
       setSyncTask(key, { current: index + 1 });
-      await cloudSyncRepository.uploadPhoto(remote.id, records[index]);
+      const record = records[index];
+      activeRecord = record;
+      await cloudSyncRepository.uploadPhoto(remote.id, record);
+      record.cloudSyncStatus = 'success';
+      await savePhoto(record);
+      const visible = photos.find(photo => photo.id === record.id);
+      if (visible) visible.cloudSyncStatus = 'success';
+      renderPhotoSyncStatus();
+      activeRecord = null;
     }
     setSyncTask(key, { phase: 'success', current: records.length, total: records.length });
   } catch (error) {
+    if (activeRecord) {
+      activeRecord.cloudSyncStatus = 'failed';
+      await savePhoto(activeRecord);
+      const visible = photos.find(photo => photo.id === activeRecord.id);
+      if (visible) visible.cloudSyncStatus = 'failed';
+    }
+    const interrupted = photos.filter(photo => photo.collectionId === collection.id && photo.cloudSyncStatus === 'syncing');
+    await Promise.all(interrupted.map(photo => {
+      photo.cloudSyncStatus = 'failed';
+      return savePhoto(photo);
+    }));
+    renderPhotoSyncStatus();
     setSyncTask(key, { phase: 'error', error: error.message });
   }
 }
@@ -547,23 +618,61 @@ async function syncCollectionToCloud(collectionId) {
 function closeSyncPanel() {
   el['canvas-sync-panel'].classList.remove('open');
   el['canvas-sync-panel'].setAttribute('aria-hidden', 'true');
-  el['canvas-sync'].setAttribute('aria-expanded', 'false');
+  document.querySelectorAll('.global-sync').forEach(button => button.setAttribute('aria-expanded', 'false'));
 }
 
-el['canvas-sync'].addEventListener('click', () => {
+document.querySelectorAll('.global-sync').forEach(button => button.addEventListener('click', () => {
   const open = !el['canvas-sync-panel'].classList.contains('open');
   if (!open) return closeSyncPanel();
   closeCanvasInfo();
   renderSyncStatus();
   el['canvas-sync-panel'].classList.add('open');
   el['canvas-sync-panel'].setAttribute('aria-hidden', 'false');
-  el['canvas-sync'].setAttribute('aria-expanded', 'true');
-});
+  document.querySelectorAll('.global-sync').forEach(target => target.setAttribute('aria-expanded', 'true'));
+}));
 el['canvas-sync-close'].addEventListener('click', closeSyncPanel);
 el['sync-status-body'].addEventListener('click', event => {
   const collectionButton = event.target.closest('[data-sync-collection]');
-  if (collectionButton) syncCollectionToCloud(collectionButton.dataset.syncCollection);
+  if (collectionButton) requestCollectionSync(collectionButton.dataset.syncCollection);
   if (event.target.closest('[data-sync-logos]')) syncLogos();
+});
+
+function closeSyncConfirmation() {
+  el['sync-confirm-modal'].classList.remove('open');
+  el['sync-confirm-modal'].setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
+}
+
+function requestCollectionSync(collectionId) {
+  const collection = collections.find(item => item.id === collectionId);
+  if (!collection) return;
+  if (!cloudUser) {
+    openUserModal();
+    showUserPanel('account');
+    return;
+  }
+  if (collection?.storageMode === 'cloud') {
+    syncCollectionToCloud(collection.id);
+    return;
+  }
+  el['sync-confirm-modal'].dataset.collectionId = collection.id;
+  document.querySelector('#sync-confirm-title').textContent = `同步“${collection.name}”？`;
+  el['sync-confirm-modal'].classList.add('open');
+  el['sync-confirm-modal'].setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+  requestAnimationFrame(() => el['sync-confirm-submit'].focus());
+}
+
+el['collection-sync'].addEventListener('click', () => requestCollectionSync(activeCollectionId));
+el['photo-sync'].addEventListener('click', () => {
+  if (el['photo-sync'].dataset.status === 'failed') syncCollectionToCloud(activeCollectionId);
+});
+el['sync-confirm-cancel'].addEventListener('click', closeSyncConfirmation);
+document.querySelector('.sync-confirm-backdrop').addEventListener('click', closeSyncConfirmation);
+el['sync-confirm-submit'].addEventListener('click', () => {
+  const collectionId = el['sync-confirm-modal'].dataset.collectionId || activeCollectionId;
+  closeSyncConfirmation();
+  syncCollectionToCloud(collectionId);
 });
 
 function openUserModal() {
@@ -1717,6 +1826,7 @@ function show(index, { deferRender = false } = {}) {
   el['delete-current'].disabled = false;
   el['canvas-lock'].disabled = false;
   el['canvas-info'].disabled = false;
+  renderPhotoSyncStatus(item);
   updatePlace();
 }
 
@@ -1755,6 +1865,7 @@ async function addFiles(fileList) {
   photos.push(...fresh);
   await Promise.all(fresh.map(savePhoto));
   if (fresh.length) show(photos.length - fresh.length);
+  if (fresh.length && activeCollection()?.storageMode === 'cloud' && cloudUser) syncCollectionToCloud(activeCollectionId);
 }
 
 function isHeic(file) {
@@ -1972,7 +2083,7 @@ el['collection-form'].addEventListener('submit', async event => {
 document.addEventListener('click', event => {
   if (!event.target.closest('.collection-heading')) closeCollectionMenu();
   if (!event.target.closest('.canvas-info, .canvas-info-panel')) closeCanvasInfo();
-  if (!event.target.closest('.canvas-sync, .canvas-sync-panel')) closeSyncPanel();
+  if (!event.target.closest('.global-sync, .canvas-sync-panel')) closeSyncPanel();
 });
 
 function showEmpty() {
@@ -1999,6 +2110,7 @@ function showEmpty() {
   el['delete-current'].disabled = true;
   el['canvas-lock'].disabled = true;
   el['canvas-info'].disabled = true;
+  el['photo-sync'].hidden = true;
   el.meta.innerHTML = '';
   closeCanvasInfo();
 }
