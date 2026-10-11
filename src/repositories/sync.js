@@ -18,6 +18,10 @@ class CloudSyncRepository {
     return cloudAccountRepository.request(`/sync/assets/${assetId}`, { method: 'DELETE' });
   }
 
+  deleteSource(kind, sourceId) {
+    return cloudAccountRepository.request(`/sync/assets/source/${kind}?source_id=${encodeURIComponent(sourceId)}`, { method: 'DELETE' });
+  }
+
   syncCollection(collection) {
     return cloudAccountRepository.request('/sync/collections', {
       method: 'POST',

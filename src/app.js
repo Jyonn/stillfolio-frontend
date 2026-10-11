@@ -423,12 +423,7 @@ let codeCooldownTimer = null;
 const syncTasks = new Map();
 const remoteLogoAssets = new Map();
 let logoSyncPromise = null;
-const LOGO_SYNC_HIDDEN_KEY = 'stillfolio-hidden-cloud-logos-v1';
-
-function hiddenCloudLogoIds() {
-  try { return new Set(JSON.parse(localStorage.getItem(LOGO_SYNC_HIDDEN_KEY)) || []); }
-  catch { return new Set(); }
-}
+localStorage.removeItem('stillfolio-hidden-cloud-logos-v1');
 
 function renderUserIdentity() {
   const cloud = Boolean(cloudUser?.id);
@@ -454,6 +449,7 @@ function taskProgress(task) {
   if (!task) return '';
   if (task.phase === 'error') return task.error || '同步失败';
   if (task.phase === 'success') return task.total ? `已同步 ${task.total} 项` : '已是最新';
+  if (task.action === 'delete') return task.kind === 'logo' ? '正在永久删除 LOGO' : '正在永久删除图片';
   if (task.kind === 'logo') return `正在${task.direction === 'download' ? '下载' : '上传'}第 ${task.current}/${task.total} 个 LOGO`;
   return `正在上传第 ${task.current}/${task.total} 张图片`;
 }
@@ -497,8 +493,7 @@ async function syncLogos() {
       remote.forEach(asset => remoteLogoAssets.set(asset.source_id, asset));
       const localIds = new Set(customLogos.map(logo => logo.id));
       const uploads = customLogos.filter(logo => !remoteLogoAssets.has(logo.id));
-      const hiddenIds = hiddenCloudLogoIds();
-      const downloads = remote.filter(asset => !localIds.has(asset.source_id) && !hiddenIds.has(asset.source_id));
+      const downloads = remote.filter(asset => !localIds.has(asset.source_id));
       const total = uploads.length + downloads.length;
       setSyncTask('logos', { kind: 'logo', phase: total ? 'running' : 'success', current: 0, total });
       let current = 0;
@@ -802,14 +797,20 @@ el['logo-library'].addEventListener('click', async event => {
   if (!remove) return;
   const id = remove.dataset.removeLogo;
   const logo = customLogos.find(item => item.id === id);
+  if (cloudUser) {
+    setSyncTask('logos', { kind: 'logo', action: 'delete', phase: 'running', current: 0, total: 1 });
+    try {
+      await cloudSyncRepository.deleteSource('logo', id);
+      remoteLogoAssets.delete(id);
+      setSyncTask('logos', { kind: 'logo', action: '', phase: 'success', current: 1, total: 1 });
+    } catch (error) {
+      setSyncTask('logos', { kind: 'logo', action: '', phase: 'error', error: error.message });
+      return;
+    }
+  }
   if (logo) URL.revokeObjectURL(logo.url);
   customLogos = customLogos.filter(item => item.id !== id);
   await removeAsset(id);
-  if (remoteLogoAssets.has(id)) {
-    const hidden = hiddenCloudLogoIds();
-    hidden.add(id);
-    localStorage.setItem(LOGO_SYNC_HIDDEN_KEY, JSON.stringify([...hidden]));
-  }
   if (displaySettings.customLogoId === id) {
     displaySettings.customLogoId = '';
     displaySettings.customLogoEnabled = false;
@@ -2020,6 +2021,17 @@ function closeDeleteModal() {
 async function deleteCurrentPhoto() {
   const item = photos[current];
   if (!item) return;
+  if (cloudUser) {
+    const key = `collection:${item.collectionId}`;
+    setSyncTask(key, { kind: 'collection', action: 'delete', phase: 'running', current: 0, total: 1 });
+    try {
+      await cloudSyncRepository.deleteSource('photo', item.id);
+      setSyncTask(key, { kind: 'collection', action: '', phase: 'success', current: 1, total: 1 });
+    } catch (error) {
+      setSyncTask(key, { kind: 'collection', action: '', phase: 'error', error: error.message });
+      return;
+    }
+  }
   URL.revokeObjectURL(item.url);
   photos.splice(current, 1);
   await removePhoto(item.id);
