@@ -476,7 +476,7 @@ function taskProgress(task) {
   if (task.phase === 'success') return task.total ? `已同步 ${task.total} 项` : '已是最新';
   if (task.action === 'delete') return task.kind === 'logo' ? '正在永久删除 LOGO' : '正在永久删除图片';
   if (task.kind === 'logo') return `正在${task.direction === 'download' ? '下载' : '上传'}第 ${task.current}/${task.total} 个 LOGO`;
-  return `正在上传第 ${task.current}/${task.total} 张图片`;
+  return `正在${task.direction === 'download' ? '下载' : '上传'}第 ${task.current}/${task.total} 张图片`;
 }
 
 function renderSyncStatus() {
@@ -564,6 +564,85 @@ async function syncLogos() {
     }
   })();
   return logoSyncPromise;
+}
+
+function remotePhotoName(asset) {
+  if (asset.metadata?.fileName) return asset.metadata.fileName;
+  const tail = String(asset.source_id || '').split(':').slice(1, -2).join(':');
+  return tail || `photograph-${asset.id}`;
+}
+
+async function restoreCloudCollections() {
+  if (!cloudUser) return;
+  let remoteCollections;
+  try {
+    remoteCollections = await cloudSyncRepository.listCollections();
+  } catch (error) {
+    setSyncTask('collections:restore', { kind: 'collection', direction: 'download', phase: 'error', error: error.message });
+    return;
+  }
+  const localPhotos = await loadPhotos();
+  const localPhotoIds = new Set(localPhotos.map(photo => photo.id));
+  let changed = false;
+
+  for (const remote of remoteCollections) {
+    let collection = collections.find(item => item.id === remote.client_id);
+    if (!collection) {
+      collection = createCollection(remote.name, remote.display_settings, remote.client_id);
+      collections.push(collection);
+      changed = true;
+    }
+    collection.name = remote.name;
+    collection.settings = cloneDisplaySettings(remote.display_settings || DEFAULT_DISPLAY_SETTINGS);
+    collection.cloudId = remote.id;
+    collection.storageMode = 'cloud';
+    collection.createdAt = Number.isFinite(Date.parse(remote.created_at)) ? Date.parse(remote.created_at) : collection.createdAt;
+
+    const assets = Array.isArray(remote.photos) ? remote.photos : [];
+    const missing = assets.filter(asset => !localPhotoIds.has(asset.source_id));
+    const key = `collection:${collection.id}`;
+    if (missing.length) setSyncTask(key, { kind: 'collection', direction: 'download', phase: 'running', current: 0, total: missing.length });
+    try {
+      for (let index = 0; index < missing.length; index += 1) {
+        const asset = missing[index];
+        setSyncTask(key, { direction: 'download', current: index + 1 });
+        const blob = await cloudSyncRepository.downloadAsset(asset);
+        const metadata = asset.metadata || {};
+        const file = new File([blob], remotePhotoName(asset), {
+          type: asset.mime_type || blob.type || 'application/octet-stream',
+          lastModified: Number(metadata.lastModified) || Date.now(),
+        });
+        await savePhoto({
+          id: asset.source_id,
+          collectionId: collection.id,
+          file,
+          width: Number(metadata.width) || 0,
+          height: Number(metadata.height) || 0,
+          exif: metadata.exif || {},
+          places: metadata.places || {},
+          place: metadata.place || '',
+          placeEditedByService: metadata.placeEditedByService || {},
+          cropX: Number.isFinite(metadata.cropX) ? metadata.cropX : 50,
+          cropY: Number.isFinite(metadata.cropY) ? metadata.cropY : 50,
+          cropMode: metadata.cropMode || 'window',
+          cloudSyncStatus: 'success',
+          createdAt: Number(metadata.createdAt) || Date.now(),
+        });
+        localPhotoIds.add(asset.source_id);
+      }
+      if (missing.length) setSyncTask(key, { direction: 'download', phase: 'success', current: missing.length, total: missing.length });
+    } catch (error) {
+      setSyncTask(key, { kind: 'collection', direction: 'download', phase: 'error', error: error.message });
+    }
+  }
+
+  if (remoteCollections.length || changed) {
+    saveCollections(collections, activeCollectionId);
+    const active = activeCollection();
+    displaySettings = cloneDisplaySettings(active?.settings || DEFAULT_DISPLAY_SETTINGS);
+    geoService = displaySettings.locationService;
+    renderCollections();
+  }
 }
 
 async function syncCollectionToCloud(collectionId) {
@@ -853,6 +932,8 @@ document.querySelector('.account-auth-form').addEventListener('submit', async ev
     renderUserIdentity();
     showUserPanel();
     syncLogos();
+    await restoreCloudCollections();
+    await restoreArchive();
   } catch (error) {
     showAccountMessage(error.message, true);
   } finally {
@@ -2554,8 +2635,10 @@ async function restoreCustomAssets() {
 
 renderCollections();
 const assetRestorePromise = restoreCustomAssets();
-assetRestorePromise.then(restoreArchive);
-Promise.all([assetRestorePromise, cloudRestorePromise]).then(([, user]) => {
+Promise.all([assetRestorePromise, cloudRestorePromise]).then(async ([, user]) => {
   renderSyncStatus();
-  if (user) syncLogos();
+  if (user) {
+    await Promise.all([syncLogos(), restoreCloudCollections()]);
+  }
+  await restoreArchive();
 });

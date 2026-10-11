@@ -2,6 +2,7 @@ import { cloudAccountRepository } from './cloud.js';
 
 class CloudSyncRepository {
   listLogos() { return cloudAccountRepository.request('/sync/logos'); }
+  listCollections() { return cloudAccountRepository.request('/sync/collections'); }
 
   uploadLogo(sourceId, blob) {
     const body = new FormData();
@@ -35,6 +36,8 @@ class CloudSyncRepository {
     body.append('metadata', JSON.stringify({
       width: photo.width, height: photo.height, exif: photo.exif, places: photo.places,
       place: photo.place, cropX: photo.cropX, cropY: photo.cropY, cropMode: photo.cropMode,
+      fileName: photo.file?.name || '', lastModified: photo.file?.lastModified || 0,
+      createdAt: photo.createdAt || Date.now(),
     }));
     body.append('file', photo.file, photo.file?.name || 'photograph.bin');
     return cloudAccountRepository.request(`/sync/collections/${collectionId}/photos`, { method: 'POST', body });
