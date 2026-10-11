@@ -951,6 +951,7 @@ button { color: inherit; }
   text-align: left;
   cursor: pointer;
 }
+.user-settings-entry[hidden] { display: none; }
 .user-settings-entry > span:first-child { color: #aaa49a; font-size: .54rem; letter-spacing: .14em; }
 .user-settings-entry strong { display: block; font-size: .76rem; font-weight: 500; }
 .user-settings-entry small { display: block; margin-top: .28rem; color: #99938a; font-size: .56rem; line-height: 1.5; }
@@ -962,6 +963,7 @@ button { color: inherit; }
 .account-summary-index { color: #aaa49a; font-size: .5rem; letter-spacing: .14em; }
 .account-summary strong { display: block; font-size: .76rem; font-weight: 500; }
 .account-summary small { display: block; margin-top: .28rem; color: #99938a; font-size: .56rem; line-height: 1.5; }
+.account-logout { border: 0; margin: .55rem 0 0; padding: 0; background: transparent; color: #8b5a51; cursor: pointer; font-size: .54rem; text-decoration: underline; text-underline-offset: .2rem; }
 .account-choice-list { display: grid; border-top: 1px solid var(--line); }
 .account-choice-list[hidden], .account-guide[hidden] { display: none; }
 .account-choice-list > button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: center; border: 0; border-bottom: 1px solid var(--line); padding: 1.25rem 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
@@ -978,8 +980,17 @@ button { color: inherit; }
 .account-guide-steps li { display: grid; grid-template-columns: 2rem 1fr; align-items: baseline; border-bottom: 1px solid var(--line); padding: .7rem 0; }
 .account-guide-steps span { color: #aaa49a; font-size: .5rem; letter-spacing: .1em; }
 .account-guide-steps p { margin: 0; font-size: .62rem; }
+.account-auth-form { display: grid; gap: .9rem; margin-top: 1.25rem; }
+.account-auth-form label { display: grid; gap: .42rem; }
+.account-auth-form label > span:first-child { color: #777168; font-size: .54rem; letter-spacing: .04em; }
+.account-auth-form input { min-width: 0; width: 100%; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: .7rem 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: .72rem; }
+.account-auth-form input:focus { border-bottom-color: var(--ink); }
+.account-code-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: .7rem; }
+.account-send-code { min-width: 5.4rem; border: 1px solid var(--line); padding: 0 .8rem; background: transparent; color: var(--ink); cursor: pointer; font-size: .56rem; }
+.account-send-code:disabled, .account-auth-start:disabled, .account-logout:disabled { cursor: wait; opacity: .45; }
 .account-auth-start { display: block; margin: 1.25rem 0 0 auto; border: 1px solid var(--ink); padding: .7rem 1rem; background: var(--ink); color: var(--paper); cursor: pointer; font-size: .62rem; }
 .account-service-note { margin: .8rem 0 0; color: #8b5a51; font-size: .56rem; line-height: 1.6; text-align: right; }
+.account-service-note:not(.error) { color: #6f7665; }
 .user-subpanel { padding: 1.15rem 0 1.4rem; border-bottom: 1px solid var(--line); }
 .user-panel-back {
   display: inline-flex;

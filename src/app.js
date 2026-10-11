@@ -1,6 +1,7 @@
 import './style.css';
 import { parseExif } from './exif.js';
 import { createCollection, loadAsset, loadAssets, loadCollections, loadPhotos, localRepositories, photoId, removeAsset, removePhoto, saveAsset, saveCollections, savePhoto } from './repositories/local.js';
+import { cloudAccountRepository } from './repositories/cloud.js';
 import { applyCropVariables, applyInlineCrop, clearCropVariables, cropLayout, needsCrop, normalizeCrop } from './crop-layout.js';
 import { createWindowedCarousel } from './carousel.js';
 import { cloneDisplaySettings, DEFAULT_DISPLAY_SETTINGS, PROPERTY_LABELS, SLOT_KEYS, slotData } from './display-settings.js';
@@ -185,7 +186,7 @@ app.innerHTML = `
         <div class="user-settings-home">
           <div class="account-summary">
             <span class="account-summary-index">ACCOUNT</span>
-            <div><strong class="profile-tier">本地用户</strong><small class="account-summary-copy">资料与作品集仅保存在当前设备</small></div>
+            <div><strong class="profile-tier">本地用户</strong><small class="account-summary-copy">资料与作品集仅保存在当前设备</small><button class="account-logout" type="button" hidden>退出云端账户</button></div>
           </div>
           <button class="user-settings-entry account-entry" type="button" data-user-panel="account">
             <span>01</span><span><strong>连接云端账户</strong><small>创建新账户，或绑定已有账户</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
@@ -212,8 +213,12 @@ app.innerHTML = `
             <h3 class="account-guide-title"></h3>
             <p class="account-guide-lead"></p>
             <ol class="account-guide-steps"></ol>
-            <button class="account-auth-start" type="button">开始手机号认证</button>
-            <p class="account-service-note" hidden>手机号认证接口将在下一阶段接入；当前本地资料不会被修改或上传。</p>
+            <form class="account-auth-form">
+              <label><span>中国大陆手机号</span><input class="account-phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="请输入 11 位手机号" maxlength="13" required></label>
+              <label><span>短信验证码</span><span class="account-code-row"><input class="account-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码" maxlength="6" required><button class="account-send-code" type="button">获取验证码</button></span></label>
+              <p class="account-service-note" role="status" hidden></p>
+              <button class="account-auth-start" type="submit">确认并连接云端</button>
+            </form>
           </div>
         </section>
         <section class="user-subpanel avatar-setting" data-user-view="avatar" hidden>
@@ -417,21 +422,22 @@ function showUserPanel(name = '') {
   });
 }
 
-function isCloudUser() {
-  try {
-    return Boolean(JSON.parse(localStorage.getItem('stillfolio-cloud-user-v1'))?.id);
-  } catch {
-    return false;
-  }
-}
+let cloudUser = null;
+let accountAuthMode = 'create';
+let codeCooldownTimer = null;
 
 function renderUserIdentity() {
-  const cloud = isCloudUser();
+  const cloud = Boolean(cloudUser?.id);
+  const localProfile = localRepositories.profile.load();
   document.querySelectorAll('.profile-tier').forEach(node => { node.textContent = cloud ? '云端用户' : '本地用户'; });
+  const nickname = cloudUser?.nickname || localProfile?.nickname;
+  if (nickname) document.querySelectorAll('.profile-nickname').forEach(node => { node.textContent = nickname; });
   const summary = document.querySelector('.account-summary-copy');
   if (summary) summary.textContent = cloud ? '账户已连接，云端作品集可跨设备访问' : '资料与作品集仅保存在当前设备';
   const entry = document.querySelector('.account-entry');
   if (entry) entry.hidden = cloud;
+  const logout = document.querySelector('.account-logout');
+  if (logout) logout.hidden = !cloud;
 }
 
 const accountGuides = {
@@ -450,6 +456,7 @@ const accountGuides = {
 function showAccountGuide(path) {
   const guide = accountGuides[path];
   if (!guide) return;
+  accountAuthMode = path;
   document.querySelector('.account-setting').classList.add('guide-open');
   document.querySelector('.account-choice-list').hidden = true;
   const panel = document.querySelector('.account-guide');
@@ -457,7 +464,9 @@ function showAccountGuide(path) {
   panel.querySelector('.account-guide-title').textContent = guide.title;
   panel.querySelector('.account-guide-lead').textContent = guide.lead;
   panel.querySelector('.account-guide-steps').innerHTML = guide.steps.map((step, index) => `<li><span>${String(index + 1).padStart(2, '0')}</span><p>${step}</p></li>`).join('');
+  panel.querySelector('.account-auth-form').reset();
   panel.querySelector('.account-service-note').hidden = true;
+  panel.querySelector('.account-auth-start').textContent = path === 'create' ? '创建并连接云端' : '登录并绑定账户';
 }
 
 function resetAccountGuide() {
@@ -574,6 +583,11 @@ const localProfile = localRepositories.profile.load();
 if (localProfile) applyLocalProfile(localProfile);
 else openOnboarding();
 
+cloudAccountRepository.restore().then(user => {
+  cloudUser = user;
+  renderUserIdentity();
+});
+
 document.querySelectorAll('.user-profile-trigger').forEach(trigger => trigger.addEventListener('click', openUserModal));
 el['user-modal-close'].addEventListener('click', closeUserModal);
 el['user-done'].addEventListener('click', closeUserModal);
@@ -583,12 +597,76 @@ document.querySelector('.user-settings').addEventListener('click', event => {
   const back = event.target.closest('[data-user-back]');
   const accountPath = event.target.closest('[data-account-path]');
   const accountGuideBack = event.target.closest('[data-account-guide-back]');
-  const authStart = event.target.closest('.account-auth-start');
   if (entry) showUserPanel(entry.dataset.userPanel);
   else if (accountPath) showAccountGuide(accountPath.dataset.accountPath);
   else if (accountGuideBack) resetAccountGuide();
-  else if (authStart) document.querySelector('.account-service-note').hidden = false;
   else if (back) showUserPanel();
+});
+
+function showAccountMessage(message, isError = false) {
+  const note = document.querySelector('.account-service-note');
+  note.textContent = message;
+  note.classList.toggle('error', isError);
+  note.hidden = false;
+}
+
+document.querySelector('.account-send-code').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  const phone = document.querySelector('.account-phone').value.trim();
+  if (!phone) return showAccountMessage('请先输入手机号', true);
+  button.disabled = true;
+  try {
+    const data = await cloudAccountRepository.sendCode(phone, accountAuthMode === 'create' ? 'register' : 'bind');
+    if (data.debug_code) document.querySelector('.account-code').value = data.debug_code;
+    showAccountMessage(data.debug_code ? '开发模式验证码已自动填入' : '验证码已发送，请查看短信');
+    let remaining = Number(data.retry_after || 60);
+    clearInterval(codeCooldownTimer);
+    button.textContent = `${remaining}s 后重试`;
+    codeCooldownTimer = setInterval(() => {
+      remaining -= 1;
+      button.textContent = remaining > 0 ? `${remaining}s 后重试` : '重新获取';
+      if (remaining <= 0) {
+        clearInterval(codeCooldownTimer);
+        button.disabled = false;
+      }
+    }, 1000);
+  } catch (error) {
+    button.disabled = false;
+    showAccountMessage(error.message, true);
+  }
+});
+
+document.querySelector('.account-auth-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const submit = event.currentTarget.querySelector('.account-auth-start');
+  submit.disabled = true;
+  try {
+    cloudUser = await cloudAccountRepository.verify({
+      phone: document.querySelector('.account-phone').value.trim(),
+      code: document.querySelector('.account-code').value.trim(),
+      scene: accountAuthMode === 'create' ? 'register' : 'bind',
+      profile: localRepositories.profile.load(),
+    });
+    renderUserIdentity();
+    showUserPanel();
+  } catch (error) {
+    showAccountMessage(error.message, true);
+  } finally {
+    submit.disabled = false;
+  }
+});
+document.querySelector('.account-logout').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await cloudAccountRepository.logout();
+    cloudUser = null;
+    renderUserIdentity();
+  } catch (error) {
+    showAccountMessage(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
 });
 el['avatar-grid'].addEventListener('click', event => {
   const choice = event.target.closest('[data-avatar]');
