@@ -2,6 +2,7 @@ import './style.css';
 import { parseExif } from './exif.js';
 import { createCollection, loadAsset, loadAssets, loadCollections, loadPhotos, localRepositories, photoId, removeAsset, removePhoto, saveAsset, saveCollections, savePhoto } from './repositories/local.js';
 import { cloudAccountRepository } from './repositories/cloud.js';
+import { cloudSyncRepository } from './repositories/sync.js';
 import { applyCropVariables, applyInlineCrop, clearCropVariables, cropLayout, needsCrop, normalizeCrop } from './crop-layout.js';
 import { createWindowedCarousel } from './carousel.js';
 import { cloneDisplaySettings, DEFAULT_DISPLAY_SETTINGS, PROPERTY_LABELS, SLOT_KEYS, slotData } from './display-settings.js';
@@ -77,9 +78,17 @@ app.innerHTML = `
       <button class="canvas-info" type="button" aria-label="查看照片信息" title="查看照片信息" aria-expanded="false" disabled>
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 10v6M12 7.5h.01"/></svg>
       </button>
+      <button class="canvas-sync" type="button" aria-label="查看同步状态" title="同步状态" aria-expanded="false">
+        <svg class="sync-cloud-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 18h10.1a4.2 4.2 0 0 0 .7-8.3A6.1 6.1 0 0 0 6.5 8.2 4.9 4.9 0 0 0 7.2 18Z"/></svg>
+        <svg class="sync-spinner-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M17 3.8h3.2V7"/></svg>
+      </button>
       <aside class="canvas-info-panel" aria-hidden="true" aria-label="照片信息">
         <header><span>Photograph details</span><button class="canvas-info-close" type="button" aria-label="关闭照片信息">×</button></header>
         <div class="meta"></div>
+      </aside>
+      <aside class="canvas-sync-panel" aria-hidden="true" aria-label="同步状态">
+        <header><span>Cloud sync</span><button class="canvas-sync-close" type="button" aria-label="关闭同步状态">×</button></header>
+        <div class="sync-status-body"></div>
       </aside>
       <nav class="folio-nav" aria-label="照片切换" hidden></nav>
     </section>
@@ -263,7 +272,7 @@ app.innerHTML = `
     </section>
   </div>`;
 
-const el = Object.fromEntries(['photo','empty','place','coordinates','meta','picker','select','customize','user-menu','mobile-user-menu','mobile-library-back','mobile-collection-list','mobile-collection-new','carousel-viewport','carousel-track','folio-nav','technical','export-run','export-choice','export-label','export-menu','delete-current','canvas-lock','canvas-info','canvas-info-panel','canvas-info-close','amap-key','opencage-key','service-key-amap','service-key-opencage','crop-hint','crop-mode-control','display-modal','display-settings-list','display-modal-close','display-cancel','display-apply','user-modal','user-modal-close','user-settings-home','avatar-grid','current-avatar-upload','custom-avatar-input','custom-logo-upload','custom-logo-input','logo-library','user-done','info-modal','info-modal-close','info-form','delete-modal','delete-modal-cancel','delete-modal-confirm','collection-modal','collection-edit','collection-trigger','collection-name','workspace-collection-name','collection-menu','collection-list','collection-form','collection-input','collection-form-cancel','collection-new'].map(c => [c, document.querySelector(`.${c}`)]));
+const el = Object.fromEntries(['photo','empty','place','coordinates','meta','picker','select','customize','user-menu','mobile-user-menu','mobile-library-back','mobile-collection-list','mobile-collection-new','carousel-viewport','carousel-track','folio-nav','technical','export-run','export-choice','export-label','export-menu','delete-current','canvas-lock','canvas-info','canvas-info-panel','canvas-info-close','canvas-sync','canvas-sync-panel','canvas-sync-close','sync-status-body','amap-key','opencage-key','service-key-amap','service-key-opencage','crop-hint','crop-mode-control','display-modal','display-settings-list','display-modal-close','display-cancel','display-apply','user-modal','user-modal-close','user-settings-home','avatar-grid','current-avatar-upload','custom-avatar-input','custom-logo-upload','custom-logo-input','logo-library','user-done','info-modal','info-modal-close','info-form','delete-modal','delete-modal-cancel','delete-modal-confirm','collection-modal','collection-edit','collection-trigger','collection-name','workspace-collection-name','collection-menu','collection-list','collection-form','collection-input','collection-form-cancel','collection-new'].map(c => [c, document.querySelector(`.${c}`)]));
 let { collections, activeId: activeCollectionId } = loadCollections(DEFAULT_DISPLAY_SETTINGS);
 let displaySettings = cloneDisplaySettings(collections.find(item => item.id === activeCollectionId)?.settings || DEFAULT_DISPLAY_SETTINGS);
 saveCollections(collections, activeCollectionId);
@@ -297,6 +306,7 @@ function renderCollections() {
   el['collection-list'].innerHTML = cards;
   el['mobile-collection-list'].innerHTML = cards;
   renderCollectionCovers(orderedCollections);
+  renderSyncStatus();
 }
 
 function collectionCardMarkup(collection) {
@@ -410,6 +420,15 @@ function showUserPanel(name = '') {
 
 let cloudUser = null;
 let codeCooldownTimer = null;
+const syncTasks = new Map();
+const remoteLogoAssets = new Map();
+let logoSyncPromise = null;
+const LOGO_SYNC_HIDDEN_KEY = 'stillfolio-hidden-cloud-logos-v1';
+
+function hiddenCloudLogoIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(LOGO_SYNC_HIDDEN_KEY)) || []); }
+  catch { return new Set(); }
+}
 
 function renderUserIdentity() {
   const cloud = Boolean(cloudUser?.id);
@@ -423,7 +442,134 @@ function renderUserIdentity() {
   if (entry) entry.hidden = cloud;
   const logout = document.querySelector('.account-logout');
   if (logout) logout.hidden = !cloud;
+  renderSyncStatus();
 }
+
+function setSyncTask(key, next) {
+  syncTasks.set(key, { ...(syncTasks.get(key) || {}), ...next });
+  renderSyncStatus();
+}
+
+function taskProgress(task) {
+  if (!task) return '';
+  if (task.phase === 'error') return task.error || '同步失败';
+  if (task.phase === 'success') return task.total ? `已同步 ${task.total} 项` : '已是最新';
+  if (task.kind === 'logo') return `正在${task.direction === 'download' ? '下载' : '上传'}第 ${task.current}/${task.total} 个 LOGO`;
+  return `正在上传第 ${task.current}/${task.total} 张图片`;
+}
+
+function renderSyncStatus() {
+  const running = [...syncTasks.values()].some(task => task.phase === 'running');
+  const failed = [...syncTasks.values()].some(task => task.phase === 'error');
+  el['canvas-sync'].classList.toggle('syncing', running);
+  el['canvas-sync'].classList.toggle('sync-error', failed);
+  el['canvas-sync'].title = running ? '正在同步' : failed ? '同步失败，点击查看' : '同步状态';
+  if (!cloudUser) {
+    el['sync-status-body'].innerHTML = '<p class="sync-empty">连接云端账户后，可自动同步 LOGO，并手动同步作品集。</p>';
+    return;
+  }
+  const logoTask = syncTasks.get('logos');
+  const collectionRows = collections.map(collection => {
+    const task = syncTasks.get(`collection:${collection.id}`);
+    const runningTask = task?.phase === 'running';
+    const status = task ? taskProgress(task) : collection.storageMode === 'cloud' ? '云端作品集' : '等待手动同步';
+    return `<section class="sync-row${task?.phase === 'error' ? ' error' : ''}">
+      <div><strong>${escapeHtml(collection.name)}</strong><small>${escapeHtml(status)}</small></div>
+      <button type="button" data-sync-collection="${escapeHtml(collection.id)}" ${runningTask ? 'disabled' : ''}>${runningTask ? '同步中' : collection.storageMode === 'cloud' ? '重新同步' : '同步'}</button>
+      ${runningTask ? `<i style="--sync-progress:${Math.round((task.current / Math.max(1, task.total)) * 100)}%"></i>` : ''}
+    </section>`;
+  }).join('');
+  el['sync-status-body'].innerHTML = `
+    <section class="sync-row sync-logo-row${logoTask?.phase === 'error' ? ' error' : ''}">
+      <div><strong>我的 LOGO</strong><small>${escapeHtml(logoTask ? taskProgress(logoTask) : '自动同步')}</small></div>
+      ${logoTask?.phase === 'error' ? '<button type="button" data-sync-logos>重试</button>' : '<span>自动</span>'}
+      ${logoTask?.phase === 'running' ? `<i style="--sync-progress:${Math.round((logoTask.current / Math.max(1, logoTask.total)) * 100)}%"></i>` : ''}
+    </section>${collectionRows}`;
+}
+
+async function syncLogos() {
+  if (!cloudUser) return;
+  if (logoSyncPromise) return logoSyncPromise;
+  logoSyncPromise = (async () => {
+    try {
+      const remote = await cloudSyncRepository.listLogos();
+      remoteLogoAssets.clear();
+      remote.forEach(asset => remoteLogoAssets.set(asset.source_id, asset));
+      const localIds = new Set(customLogos.map(logo => logo.id));
+      const uploads = customLogos.filter(logo => !remoteLogoAssets.has(logo.id));
+      const hiddenIds = hiddenCloudLogoIds();
+      const downloads = remote.filter(asset => !localIds.has(asset.source_id) && !hiddenIds.has(asset.source_id));
+      const total = uploads.length + downloads.length;
+      setSyncTask('logos', { kind: 'logo', phase: total ? 'running' : 'success', current: 0, total });
+      let current = 0;
+      for (const logo of uploads) {
+        setSyncTask('logos', { direction: 'upload', current: current + 1 });
+        const asset = await cloudSyncRepository.uploadLogo(logo.id, logo.blob);
+        remoteLogoAssets.set(logo.id, asset);
+        current += 1;
+      }
+      for (const asset of downloads) {
+        setSyncTask('logos', { direction: 'download', current: current + 1 });
+        const blob = await cloudSyncRepository.downloadAsset(asset);
+        await saveAsset(asset.source_id, blob);
+        customLogos.push({ id: asset.source_id, blob, url: URL.createObjectURL(blob) });
+        remoteLogoAssets.set(asset.source_id, asset);
+        current += 1;
+      }
+      renderLogoLibrary();
+      setSyncTask('logos', { phase: 'success', current: total, total });
+    } catch (error) {
+      setSyncTask('logos', { kind: 'logo', phase: 'error', error: error.message });
+    } finally {
+      logoSyncPromise = null;
+    }
+  })();
+  return logoSyncPromise;
+}
+
+async function syncCollectionToCloud(collectionId) {
+  if (!cloudUser) return;
+  const collection = collections.find(item => item.id === collectionId);
+  if (!collection) return;
+  const key = `collection:${collection.id}`;
+  try {
+    const records = (await loadPhotos()).filter(photo => photo.collectionId === collection.id);
+    setSyncTask(key, { kind: 'collection', phase: 'running', current: 0, total: records.length });
+    const remote = await cloudSyncRepository.syncCollection(collection);
+    collection.cloudId = remote.id;
+    collection.storageMode = 'cloud';
+    saveCollections(collections, activeCollectionId);
+    for (let index = 0; index < records.length; index += 1) {
+      setSyncTask(key, { current: index + 1 });
+      await cloudSyncRepository.uploadPhoto(remote.id, records[index]);
+    }
+    setSyncTask(key, { phase: 'success', current: records.length, total: records.length });
+  } catch (error) {
+    setSyncTask(key, { phase: 'error', error: error.message });
+  }
+}
+
+function closeSyncPanel() {
+  el['canvas-sync-panel'].classList.remove('open');
+  el['canvas-sync-panel'].setAttribute('aria-hidden', 'true');
+  el['canvas-sync'].setAttribute('aria-expanded', 'false');
+}
+
+el['canvas-sync'].addEventListener('click', () => {
+  const open = !el['canvas-sync-panel'].classList.contains('open');
+  if (!open) return closeSyncPanel();
+  closeCanvasInfo();
+  renderSyncStatus();
+  el['canvas-sync-panel'].classList.add('open');
+  el['canvas-sync-panel'].setAttribute('aria-hidden', 'false');
+  el['canvas-sync'].setAttribute('aria-expanded', 'true');
+});
+el['canvas-sync-close'].addEventListener('click', closeSyncPanel);
+el['sync-status-body'].addEventListener('click', event => {
+  const collectionButton = event.target.closest('[data-sync-collection]');
+  if (collectionButton) syncCollectionToCloud(collectionButton.dataset.syncCollection);
+  if (event.target.closest('[data-sync-logos]')) syncLogos();
+});
 
 function openUserModal() {
   renderAvatars();
@@ -532,9 +678,11 @@ const localProfile = localRepositories.profile.load();
 if (localProfile) applyLocalProfile(localProfile);
 else openOnboarding();
 
-cloudAccountRepository.restore().then(user => {
+const cloudRestorePromise = cloudAccountRepository.restore().then(user => {
   cloudUser = user;
   renderUserIdentity();
+  renderSyncStatus();
+  return user;
 });
 
 document.querySelectorAll('.user-profile-trigger').forEach(trigger => trigger.addEventListener('click', openUserModal));
@@ -594,6 +742,7 @@ document.querySelector('.account-auth-form').addEventListener('submit', async ev
     });
     renderUserIdentity();
     showUserPanel();
+    syncLogos();
   } catch (error) {
     showAccountMessage(error.message, true);
   } finally {
@@ -645,6 +794,7 @@ el['custom-logo-input'].addEventListener('change', async event => {
     customLogos.push({ id, blob: file, url: URL.createObjectURL(file) });
   }
   renderLogoLibrary();
+  syncLogos();
   event.target.value = '';
 });
 el['logo-library'].addEventListener('click', async event => {
@@ -655,6 +805,11 @@ el['logo-library'].addEventListener('click', async event => {
   if (logo) URL.revokeObjectURL(logo.url);
   customLogos = customLogos.filter(item => item.id !== id);
   await removeAsset(id);
+  if (remoteLogoAssets.has(id)) {
+    const hidden = hiddenCloudLogoIds();
+    hidden.add(id);
+    localStorage.setItem(LOGO_SYNC_HIDDEN_KEY, JSON.stringify([...hidden]));
+  }
   if (displaySettings.customLogoId === id) {
     displaySettings.customLogoId = '';
     displaySettings.customLogoEnabled = false;
@@ -1810,6 +1965,7 @@ el['collection-form'].addEventListener('submit', async event => {
 document.addEventListener('click', event => {
   if (!event.target.closest('.collection-heading')) closeCollectionMenu();
   if (!event.target.closest('.canvas-info, .canvas-info-panel')) closeCanvasInfo();
+  if (!event.target.closest('.canvas-sync, .canvas-sync-panel')) closeSyncPanel();
 });
 
 function showEmpty() {
@@ -2267,4 +2423,9 @@ async function restoreCustomAssets() {
 }
 
 renderCollections();
-restoreCustomAssets().then(restoreArchive);
+const assetRestorePromise = restoreCustomAssets();
+assetRestorePromise.then(restoreArchive);
+Promise.all([assetRestorePromise, cloudRestorePromise]).then(([, user]) => {
+  renderSyncStatus();
+  if (user) syncLogos();
+});

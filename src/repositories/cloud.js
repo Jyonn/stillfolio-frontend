@@ -3,10 +3,11 @@ class CloudAccountRepository {
   user = null;
 
   async request(path, options = {}) {
-    const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    const headers = { ...(options.headers || {}) };
+    if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
     if (this.accessToken) headers.Authorization = `Bearer ${this.accessToken}`;
     const response = await fetch(`/api/v1${path}`, { credentials: 'include', ...options, headers });
-    const data = response.status === 204 ? null : await response.json().catch(() => ({}));
+    const data = options.raw ? await response.blob() : response.status === 204 ? null : await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data?.detail || '云端服务请求失败');
     return data;
   }

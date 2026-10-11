@@ -420,6 +420,30 @@ button { color: inherit; }
 .canvas-info[aria-expanded="true"] { background: rgb(245 243 237 / 62%); color: var(--ink); opacity: 1; outline: none; }
 .canvas-info:disabled { display: none; }
 .canvas-info svg { width: .95rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.35; }
+.canvas-sync {
+  position: absolute;
+  z-index: 4;
+  top: 10.2rem;
+  left: calc(100% + .65rem);
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #777168;
+  cursor: pointer;
+  opacity: .42;
+  transition: opacity .2s ease, color .2s ease, background .2s ease;
+}
+.canvas-sync:hover, .canvas-sync:focus-visible, .canvas-sync[aria-expanded="true"] { background: rgb(245 243 237 / 62%); color: var(--ink); opacity: 1; outline: none; }
+.canvas-sync svg { position: absolute; width: 1rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.35; }
+.canvas-sync .sync-spinner-icon { display: none; width: .62rem; right: .18rem; bottom: .18rem; stroke-width: 1.8; }
+.canvas-sync.syncing { opacity: 1; }
+.canvas-sync.syncing .sync-spinner-icon { display: block; animation: sync-spin 1s linear infinite; }
+.canvas-sync.sync-error { color: #8b5a51; opacity: 1; }
+@keyframes sync-spin { to { transform: rotate(360deg); } }
 .canvas-info-panel {
   position: absolute;
   z-index: 12;
@@ -441,6 +465,39 @@ button { color: inherit; }
 .canvas-info-panel.open { opacity: 1; visibility: visible; pointer-events: auto; transform: none; transition-delay: 0s; }
 .canvas-info-panel > header { position: sticky; top: -.45rem; z-index: 1; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding: .75rem 0 .65rem; background: var(--paper); color: #8e887f; font-size: .52rem; letter-spacing: .16em; text-transform: uppercase; }
 .canvas-info-close { border: 0; padding: 0 .1rem; background: transparent; color: #8e887f; cursor: pointer; font-size: 1rem; font-weight: 300; line-height: 1; }
+.canvas-sync-panel {
+  position: absolute;
+  z-index: 12;
+  top: 10.2rem;
+  left: calc(100% + 3rem);
+  width: min(19rem, 38vw);
+  max-height: min(34rem, calc(100dvh - 12rem));
+  overflow: auto;
+  border: 1px solid var(--ink);
+  padding: .45rem .85rem .8rem;
+  background: var(--paper);
+  box-shadow: 0 1.25rem 3rem rgb(52 48 39 / 14%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-.35rem);
+  transition: opacity .16s ease, transform .2s var(--ease), visibility 0s linear .2s;
+}
+.canvas-sync-panel.open { opacity: 1; visibility: visible; pointer-events: auto; transform: none; transition-delay: 0s; }
+.canvas-sync-panel > header { position: sticky; top: -.45rem; z-index: 1; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding: .75rem 0 .65rem; background: var(--paper); color: #8e887f; font-size: .52rem; letter-spacing: .16em; text-transform: uppercase; }
+.canvas-sync-close { border: 0; padding: 0 .1rem; background: transparent; color: #8e887f; cursor: pointer; font-size: 1rem; font-weight: 300; line-height: 1; }
+.sync-status-body { display: grid; }
+.sync-empty { margin: 0; padding: 1rem 0 .4rem; color: #777168; font-size: .6rem; line-height: 1.7; }
+.sync-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; border-bottom: 1px solid var(--line); padding: .9rem 0; overflow: hidden; }
+.sync-row:last-child { border-bottom: 0; }
+.sync-row strong, .sync-row small { display: block; }
+.sync-row strong { overflow: hidden; font-family: "Noto Serif SC", serif; font-size: .66rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.sync-row small { margin-top: .28rem; color: #918b82; font-size: .52rem; line-height: 1.45; }
+.sync-row.error small { color: #8b5a51; }
+.sync-row > button { border: 0; padding: .35rem 0 .35rem .5rem; background: transparent; color: #625e57; cursor: pointer; font-size: .54rem; }
+.sync-row > button:disabled { cursor: wait; opacity: .5; }
+.sync-row > span { color: #aaa49a; font-size: .5rem; letter-spacing: .08em; }
+.sync-row > i { position: absolute; right: 0; bottom: 0; left: 0; height: 1px; background: linear-gradient(to right, var(--ink) var(--sync-progress), var(--line) var(--sync-progress)); }
 .artboard-wrap:not(.canvas-locked) .display-slot[data-content="camera"],
 .artboard-wrap:not(.canvas-locked) .display-slot[data-content="exposure"],
 .artboard-wrap:not(.canvas-locked) .display-slot[data-content="takenAt"],
@@ -1121,11 +1178,14 @@ button { color: inherit; }
   .canvas-lock { top: 6rem; }
   .crop-mode-control { top: 8.55rem; }
   .canvas-info { top: 11.1rem; }
+  .canvas-sync { top: 13.65rem; }
   .canvas-delete,
   .canvas-lock,
   .crop-mode-control,
-  .canvas-info { color: #625e57; opacity: .76; }
+  .canvas-info,
+  .canvas-sync { color: #625e57; opacity: .76; }
   .canvas-info-panel { top: 11.1rem; max-height: min(34rem, calc(100dvh - 12rem)); }
+  .canvas-sync-panel { top: 13.65rem; max-height: min(31rem, calc(100dvh - 14.5rem)); }
   .collection-heading { flex: 1 1 auto; min-height: 0; margin: 0; }
   .collection-trigger { display: none; }
   .collection-menu,
@@ -1179,7 +1239,8 @@ button { color: inherit; }
   .canvas-delete,
   .canvas-lock,
   .crop-mode-control,
-  .canvas-info {
+  .canvas-info,
+  .canvas-sync {
     top: .25rem;
     width: 1.9rem;
     height: 1.9rem;
@@ -1195,6 +1256,7 @@ button { color: inherit; }
     right: 5.05rem;
   }
   .canvas-info { left: auto; right: 7.35rem; }
+  .canvas-sync { left: auto; right: 9.65rem; }
   .mobile-library-back {
     position: absolute;
     z-index: 8;
@@ -1210,6 +1272,14 @@ button { color: inherit; }
   }
   .mobile-library-back svg { width: .95rem; fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: square; stroke-linejoin: miter; }
   .canvas-info-panel {
+    top: 2.65rem;
+    right: .45rem;
+    left: auto;
+    width: min(21rem, calc(100% - .9rem));
+    max-height: min(30rem, 65dvh);
+    transform: translateY(-.35rem);
+  }
+  .canvas-sync-panel {
     top: 2.65rem;
     right: .45rem;
     left: auto;
