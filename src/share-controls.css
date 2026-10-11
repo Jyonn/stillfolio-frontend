@@ -1,0 +1,56 @@
+.shared-progress button {
+  position: relative;
+  overflow: hidden;
+}
+
+.shared-controls.playing .shared-progress button.active::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: #201f1b;
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: shared-autoplay-progress 5s linear forwards;
+}
+
+.shared-autoplay {
+  grid-column: 1;
+}
+
+.shared-autoplay .play-icon {
+  display: none;
+}
+
+.shared-controls:not(.playing) .shared-autoplay .pause-icon {
+  display: none;
+}
+
+.shared-controls:not(.playing) .shared-autoplay .play-icon {
+  display: block;
+}
+
+.shared-download {
+  grid-column: 2 / -1 !important;
+}
+
+.shared-download.busy svg {
+  animation: shared-download-pulse .8s ease-in-out infinite alternate;
+}
+
+@keyframes shared-autoplay-progress {
+  to { transform: scaleX(1); }
+}
+
+@keyframes shared-download-pulse {
+  to {
+    opacity: .35;
+    transform: translateY(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shared-controls.playing .shared-progress button.active::after {
+    animation: none;
+    transform: scaleX(1);
+  }
+}

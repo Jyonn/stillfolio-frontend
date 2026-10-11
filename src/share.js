@@ -1,6 +1,8 @@
 import './share.css';
+import './share-controls.css';
 import brandLogoUrl from './assets/stillfolio-logo.svg?url';
 import { createReadonlyCanvas } from './readonly-canvas.js';
+import { toBlob } from 'html-to-image';
 
 const app = document.querySelector('#app');
 
@@ -13,13 +15,19 @@ function photoRecord(asset) {
   return { ...metadata, id: asset.id, content_url: asset.content_url, width: Number(metadata.width) || 0, height: Number(metadata.height) || 0, exif: metadata.exif || {}, places: metadata.places || {}, file: { name: metadata.fileName || 'photograph', size: Number(asset.size) || 0 } };
 }
 
-function downloadPhoto(photo) {
+function safeName(name = 'photograph') {
+  return name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '_');
+}
+
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = photo.content_url;
-  link.download = photo.file.name || 'photograph';
+  link.href = url;
+  link.download = name;
   document.body.appendChild(link);
   link.click();
   link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 export async function renderSharedCollection(token) {
@@ -32,12 +40,21 @@ export async function renderSharedCollection(token) {
     const photos = (Array.isArray(collection.photos) ? collection.photos : []).map(photoRecord);
     let current = 0;
     document.title = `${collection.name} · 留幅 STILLFOLIO`;
-    app.innerHTML = `<main class="shared-page"><header class="shared-header"><a href="/" aria-label="留幅 STILLFOLIO"><img src="${brandLogoUrl}" alt="留幅 STILLFOLIO"></a><div><strong>${escapeHtml(collection.name)}</strong><small>${photos.length} PHOTOGRAPHS</small></div></header><section class="shared-workspace"><div class="shared-canvas-host"></div><nav class="shared-controls" aria-label="作品集浏览"><button class="shared-previous" type="button" aria-label="上一张"><svg viewBox="0 0 24 24"><path d="m14.5 5-7 7 7 7"/></svg></button><div class="shared-progress" role="tablist"></div><button class="shared-next" type="button" aria-label="下一张"><svg viewBox="0 0 24 24"><path d="m9.5 5 7 7-7 7"/></svg></button><button class="shared-download" type="button" aria-label="下载当前照片"><svg viewBox="0 0 24 24"><path d="M12 4v12m0 0 4.5-4.5M12 16l-4.5-4.5M5 20h14"/></svg><span>下载当前照片</span></button></nav></section><footer class="shared-footer"><span>只读作品集</span><span>照片由留幅呈现</span></footer></main>`;
+    app.innerHTML = `<main class="shared-page"><header class="shared-header"><a href="/" aria-label="留幅 STILLFOLIO"><img src="${brandLogoUrl}" alt="留幅 STILLFOLIO"></a><div><strong>${escapeHtml(collection.name)}</strong><small>${photos.length} PHOTOGRAPHS</small></div></header><section class="shared-workspace"><div class="shared-canvas-host"></div><nav class="shared-controls playing" aria-label="作品集浏览"><button class="shared-previous" type="button" aria-label="上一张"><svg viewBox="0 0 24 24"><path d="m14.5 5-7 7 7 7"/></svg></button><div class="shared-progress" role="tablist"></div><button class="shared-next" type="button" aria-label="下一张"><svg viewBox="0 0 24 24"><path d="m9.5 5 7 7-7 7"/></svg></button><button class="shared-autoplay" type="button" aria-label="暂停自动轮播" aria-pressed="true"><svg class="pause-icon" viewBox="0 0 24 24"><path d="M9 7v10M15 7v10"/></svg><svg class="play-icon" viewBox="0 0 24 24"><path d="m9 7 8 5-8 5z"/></svg></button><button class="shared-download" type="button" aria-label="下载当前画布"><svg viewBox="0 0 24 24"><path d="M12 4v12m0 0 4.5-4.5M12 16l-4.5-4.5M5 20h14"/></svg><span>下载当前画布</span></button></nav></section><footer class="shared-footer"><span>只读作品集</span><span>照片由留幅呈现</span></footer></main>`;
     const host = app.querySelector('.shared-canvas-host');
     const progress = app.querySelector('.shared-progress');
     const previous = app.querySelector('.shared-previous');
     const next = app.querySelector('.shared-next');
     const download = app.querySelector('.shared-download');
+    const autoplay = app.querySelector('.shared-autoplay');
+    const controls = app.querySelector('.shared-controls');
+    let playing = photos.length > 1;
+    let timer = 0;
+    const schedule = () => {
+      clearTimeout(timer);
+      if (!playing || photos.length < 2 || document.hidden) return;
+      timer = window.setTimeout(() => { current = (current + 1) % photos.length; render(); }, 5000);
+    };
     const render = () => {
       if (!photos.length) {
         host.innerHTML = '<div class="shared-empty">这个作品集还没有照片。</div>';
@@ -48,11 +65,42 @@ export async function renderSharedCollection(token) {
       progress.innerHTML = photos.map((_, index) => `<button type="button" role="tab" data-index="${index}" aria-selected="${index === current}" class="${index === current ? 'active' : ''}" aria-label="第 ${index + 1} 张"></button>`).join('');
       previous.disabled = current === 0;
       next.disabled = current === photos.length - 1;
+      schedule();
     };
     previous.addEventListener('click', () => { if (current > 0) { current -= 1; render(); } });
     next.addEventListener('click', () => { if (current < photos.length - 1) { current += 1; render(); } });
     progress.addEventListener('click', event => { const target = event.target.closest('[data-index]'); if (target) { current = Number(target.dataset.index); render(); } });
-    download.addEventListener('click', () => photos[current] && downloadPhoto(photos[current]));
+    autoplay.addEventListener('click', () => {
+      playing = !playing;
+      controls.classList.toggle('playing', playing);
+      autoplay.setAttribute('aria-pressed', String(playing));
+      autoplay.setAttribute('aria-label', playing ? '暂停自动轮播' : '继续自动轮播');
+      schedule();
+    });
+    autoplay.disabled = photos.length < 2;
+    download.addEventListener('click', async () => {
+      const artboard = host.querySelector('.readonly-artboard');
+      if (!artboard || download.disabled) return;
+      download.disabled = true;
+      download.classList.add('busy');
+      try {
+        await document.fonts?.ready;
+        const image = artboard.querySelector('.readonly-photo-stage img');
+        if (image && !image.complete) await new Promise((resolve, reject) => { image.addEventListener('load', resolve, { once: true }); image.addEventListener('error', reject, { once: true }); });
+        const blob = await toBlob(artboard, { backgroundColor: '#f5f3ed', pixelRatio: 2160 / Math.max(1, artboard.getBoundingClientRect().width), cacheBust: true });
+        if (!blob) throw new Error('画布导出失败');
+        downloadBlob(blob, `${safeName(photos[current].file.name)}-stillfolio.png`);
+      } catch (error) {
+        console.error('导出共享画布失败', error);
+        const label = download.querySelector('span');
+        label.textContent = '导出失败，请重试';
+        window.setTimeout(() => { label.textContent = '下载当前画布'; }, 1800);
+      } finally {
+        download.disabled = false;
+        download.classList.remove('busy');
+      }
+    });
+    document.addEventListener('visibilitychange', schedule);
     document.addEventListener('keydown', event => { if (event.key === 'ArrowLeft') previous.click(); if (event.key === 'ArrowRight') next.click(); });
     render();
   } catch (error) {
