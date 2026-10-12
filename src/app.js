@@ -256,6 +256,9 @@ app.innerHTML = `
           <button class="user-settings-entry account-entry" type="button" data-user-panel="account">
             <span><strong>连接云端账户</strong><small>使用手机号认证，系统将自动创建或连接账户</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
+          <button class="user-settings-entry" type="button" data-user-panel="nickname">
+            <span><strong>修改昵称</strong><small class="nickname-setting-current"></small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+          </button>
           <button class="user-settings-entry" type="button" data-user-panel="geo">
             <span><strong>地理解析服务</strong><small>高德与 OpenCage 服务 Key</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
@@ -263,6 +266,13 @@ app.innerHTML = `
             <span><strong>我的 LOGO</strong><small class="logo-settings-description">添加并管理当前设备的 LOGO</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
         </div>
+        <section class="user-subpanel nickname-setting" data-user-view="nickname" hidden>
+          <button class="user-panel-back" type="button" data-user-back><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg><span>修改昵称</span></button>
+          <form class="nickname-form account-auth-form">
+            <label><span>昵称</span><input class="nickname-input" maxlength="24" autocomplete="nickname" placeholder="如何称呼你" required></label>
+            <p class="nickname-note account-service-note" role="status" hidden></p>
+          </form>
+        </section>
         <section class="user-subpanel account-setting" data-user-view="account" hidden>
           <button class="user-panel-back" type="button" data-user-back><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg><span>连接云端账户</span></button>
           <form class="account-auth-form">
@@ -494,7 +504,13 @@ function showUserPanel(name = '') {
   document.querySelectorAll('[data-user-view]').forEach(panel => {
     panel.hidden = panel.dataset.userView !== name;
   });
-  el['user-done'].textContent = name === 'account' ? '连接云端' : '完成';
+  el['user-done'].textContent = name === 'account' ? '连接云端' : name === 'nickname' ? '保存' : '完成';
+  if (name === 'nickname') {
+    document.querySelector('.nickname-input').value = cloudUser?.nickname || localRepositories.profile.load()?.nickname || '';
+    document.querySelector('.nickname-note').hidden = true;
+    requestAnimationFrame(() => document.querySelector('.nickname-input').focus());
+  }
+  document.querySelector('.nickname-setting-current').textContent = cloudUser?.nickname || localRepositories.profile.load()?.nickname || '';
 }
 
 let cloudUser = null;
@@ -1360,6 +1376,10 @@ const cloudRestorePromise = cloudAccountRepository.restore().then(user => {
 document.querySelectorAll('.user-profile-trigger').forEach(trigger => trigger.addEventListener('click', openUserModal));
 el['user-modal-close'].addEventListener('click', closeUserModal);
 el['user-done'].addEventListener('click', () => {
+  if (!document.querySelector('.nickname-setting').hidden) {
+    document.querySelector('.nickname-form').requestSubmit();
+    return;
+  }
   if (!document.querySelector('.account-setting').hidden) {
     document.querySelector('.account-auth-form').requestSubmit();
     return;
@@ -1367,6 +1387,37 @@ el['user-done'].addEventListener('click', () => {
   closeUserModal();
 });
 document.querySelector('.user-modal-backdrop').addEventListener('click', closeUserModal);
+document.querySelector('.nickname-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const input = document.querySelector('.nickname-input');
+  const nickname = input.value.trim();
+  const note = document.querySelector('.nickname-note');
+  if (!nickname) { note.textContent = '请输入昵称'; note.hidden = false; input.focus(); return; }
+  const owner = cloudUser?.id;
+  el['user-done'].disabled = true;
+  input.disabled = true;
+  try {
+    if (owner) {
+      await avatarSyncChain;
+      if (cloudUser?.id !== owner) throw new Error('账户已变更，请重试');
+      const user = await cloudAccountRepository.updateProfile({nickname});
+      if (cloudUser?.id !== owner) return;
+      cloudUser = user;
+      persistCloudProfile(user);
+    } else {
+      const profile = localRepositories.profile.save({...localRepositories.profile.load(), nickname});
+      applyLocalProfile(profile);
+    }
+    renderUserIdentity();
+    showUserPanel();
+  } catch (error) {
+    note.textContent = `保存失败：${error.message}`;
+    note.hidden = false;
+  } finally {
+    el['user-done'].disabled = false;
+    input.disabled = false;
+  }
+});
 document.querySelector('.user-settings').addEventListener('click', event => {
   const entry = event.target.closest('[data-user-panel]');
   const back = event.target.closest('[data-user-back]');
