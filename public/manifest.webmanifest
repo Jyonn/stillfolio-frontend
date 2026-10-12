@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "留幅 STILLFOLIO",
+  "short_name": "留幅",
+  "description": "摄影作品集整理、编排与分享工作台",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone"],
+  "orientation": "any",
+  "background_color": "#ece8df",
+  "theme_color": "#ece8df",
+  "categories": ["photo", "productivity", "design"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
