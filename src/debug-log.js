@@ -5,6 +5,17 @@ let lines = [];
 try { lines = JSON.parse(sessionStorage.getItem(KEY) || '[]').filter(line => typeof line === 'string').slice(-300); } catch {}
 let output;
 let sequence = 0;
+export function debugError(error) {
+  const clean = value => String(value || '').replace(/https?:\/\/[^\s)]+/g, '[URL]').replace(/(?:Bearer\s+\S+|(?:key|token|password|secret)\s*[=:]\s*[^\s,;]+)/gi, '[已隐藏]').replace(/\b\d{6,}\b/g, '[数字已隐藏]').slice(0, 1000);
+  return {type: error?.name || 'Error', message: clean(error?.message || error), stack: clean(error?.stack)};
+}
+export function debugFile(file) {
+  const result = {};
+  for (const [key, read] of Object.entries({kind: () => Object.prototype.toString.call(file), blob: () => file instanceof Blob, file: () => file instanceof File, bytes: () => file?.size, mime: () => file?.type, hasName: () => Boolean(file?.name), slice: () => typeof file?.slice})) {
+    try { result[key] = read(); } catch (error) { result[key] = debugError(error).message; }
+  }
+  return result;
+}
 export function debugLog(event, details = {}) {
   // Callers supply only timings, counts, states and sanitized paths; never payloads.
   lines.push(`${new Date().toISOString()} ${event} ${JSON.stringify(details)}`);
@@ -68,8 +79,8 @@ function mount() {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, {once: true});
 else mount();
-window.addEventListener('unhandledrejection', event => debugLog('未处理异常', {type: event.reason?.name || 'unknown'}));
-window.addEventListener('error', event => { if (event.error) debugLog('脚本异常', {type: event.error.name, line: event.lineno}); });
+window.addEventListener('unhandledrejection', event => debugLog('未处理异常', debugError(event.reason)));
+window.addEventListener('error', event => { if (event.error) debugLog('脚本异常', {...debugError(event.error), line: event.lineno}); });
 window.addEventListener('online', () => debugLog('网络恢复'));
 window.addEventListener('offline', () => debugLog('网络断开'));
 document.addEventListener('visibilitychange', () => debugLog('页面可见性', {state: document.visibilityState}));

@@ -1,4 +1,5 @@
 import { cloudAccountRepository } from './cloud.js';
+import { debugLog, debugFile, debugError } from '../debug-log.js';
 
 class CloudSyncRepository {
   listLogos() { return cloudAccountRepository.request('/sync/logos'); }
@@ -51,12 +52,25 @@ class CloudSyncRepository {
     return cloudAccountRepository.request(`/sync/collections/${collectionId}/share`, { method: 'POST' });
   }
 
-  uploadPhoto(collectionId, photo) {
+  async uploadPhoto(collectionId, photo) {
+    debugLog('上传文件检查', {sourceIdPresent: Boolean(photo.id), ...debugFile(photo.file)});
+    let timer;
+    try {
+      const bytes = await Promise.race([
+        photo.file.slice(0, 1).arrayBuffer(),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('文件读取探针超过3秒')), 3000); }),
+      ]);
+      debugLog('上传文件可读', {probeBytes: bytes.byteLength});
+    } catch (error) { debugLog('上传文件读取异常', debugError(error)); }
+    finally { clearTimeout(timer); }
+    try {
     const body = new FormData();
     body.append('source_id', photo.id);
     body.append('metadata', JSON.stringify(this.photoMetadata(photo)));
     body.append('file', photo.file, photo.file?.name || 'photograph.bin');
+    debugLog('FormData 文件检查', {sourceIdPresent: Boolean(body.get('source_id')), metadataLength: String(body.get('metadata')).length, ...debugFile(body.get('file'))});
     return cloudAccountRepository.request(`/sync/collections/${collectionId}/photos`, { method: 'POST', body });
+    } catch (error) { debugLog('构造上传表单失败', debugError(error)); throw error; }
   }
 
   updatePhotoMetadata(collectionId, photo) {

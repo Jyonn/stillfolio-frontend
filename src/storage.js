@@ -1,4 +1,4 @@
-import { debugLog, debugId } from './debug-log.js';
+import { debugLog, debugId, debugError, debugFile } from './debug-log.js';
 const DB_NAME = 'jyonn-photo-archive';
 const DB_VERSION = 2;
 const STORE = 'photos';
@@ -21,11 +21,15 @@ function openDatabase() {
 async function transaction(mode, callback) {
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, mode);
+    let tx;
+    try {
+    tx = db.transaction(STORE, mode);
     const store = tx.objectStore(STORE);
     callback(store);
     tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.onerror = () => { debugLog('IndexedDB 事务错误', debugError(tx.error)); db.close(); reject(tx.error); };
+    tx.onabort = () => { debugLog('IndexedDB 事务中止', debugError(tx.error)); db.close(); reject(tx.error || new Error('IndexedDB transaction aborted')); };
+    } catch (error) { debugLog('IndexedDB 构造事务或 put 失败', debugError(error)); db.close(); reject(error); }
   });
 }
 
@@ -35,7 +39,7 @@ export function photoId(file, collectionId = 'default') {
 
 export async function savePhoto(item) {
   const trace = debugId(), start = performance.now();
-  debugLog('照片本地保存开始', {trace, state: item.cloudSyncStatus || 'local', bytes: item.file?.size});
+  debugLog('照片本地保存开始', {trace, state: item.cloudSyncStatus || 'local', ...debugFile(item.file)});
   const slow = setTimeout(() => debugLog('照片本地保存等待超过15秒', {trace}), 15000);
   const record = {
     id: item.id,
@@ -61,7 +65,7 @@ export async function savePhoto(item) {
   try {
     await transaction('readwrite', store => store.put(record));
     debugLog('照片本地保存完成', {trace, ms: Math.round(performance.now() - start)});
-  } catch (error) { debugLog('照片本地保存失败', {trace, type: error.name}); throw error; }
+  } catch (error) { debugLog('照片本地保存失败', {trace, ...debugError(error)}); throw error; }
   finally { clearTimeout(slow); }
 }
 
