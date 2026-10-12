@@ -112,6 +112,7 @@ export async function renderSharedCollection(token) {
     const viewport = app.querySelector('.carousel-viewport');
     let playing = photos.length > 1;
     let timer = 0;
+    let exporting = false;
     let renderRevision = 0;
     let preloadRevision = 0;
     controls.classList.toggle('playing', playing);
@@ -119,7 +120,7 @@ export async function renderSharedCollection(token) {
     autoplay.setAttribute('aria-label', playing ? '暂停自动轮播' : '自动轮播');
     const schedule = () => {
       clearTimeout(timer);
-      if (!playing || photos.length < 2 || document.hidden) return;
+      if (!playing || exporting || photos.length < 2 || document.hidden) return;
       timer = window.setTimeout(() => { current = (current + 1) % photos.length; render(); }, 5000);
     };
     const preloadFollowing = async (start, revision) => {
@@ -179,13 +180,14 @@ export async function renderSharedCollection(token) {
       progress.innerHTML = photos.map((_, index) => `<button type="button" role="tab" data-index="${index}" aria-selected="${index === current}" class="folio-segment${index === current ? ' active' : ''}" aria-label="第 ${index + 1} 张"></button>`).join('');
       hydrateCurrentImage(photos[current], revision);
     };
-    progress.addEventListener('click', event => { const target = event.target.closest('[data-index]'); if (target) { current = Number(target.dataset.index); render(); } });
+    progress.addEventListener('click', event => { const target = event.target.closest('[data-index]'); if (!exporting && target) { current = Number(target.dataset.index); render(); } });
     let swipeStartX = null;
     viewport.addEventListener('pointerdown', event => { swipeStartX = event.clientX; });
     viewport.addEventListener('pointerup', event => {
       if (swipeStartX == null) return;
       const distance = event.clientX - swipeStartX;
       swipeStartX = null;
+      if (exporting) return;
       if (Math.abs(distance) < 42) return;
       if (distance < 0 && current < photos.length - 1) current += 1;
       else if (distance > 0 && current > 0) current -= 1;
@@ -194,6 +196,7 @@ export async function renderSharedCollection(token) {
     });
     viewport.addEventListener('pointercancel', () => { swipeStartX = null; });
     autoplay.addEventListener('click', () => {
+      if (exporting) return;
       playing = !playing;
       controls.classList.toggle('playing', playing);
       autoplay.setAttribute('aria-pressed', String(playing));
@@ -204,29 +207,38 @@ export async function renderSharedCollection(token) {
     download.addEventListener('click', async () => {
       const artboard = host.querySelector('.artboard');
       if (!artboard || download.disabled) return;
+      const exportIndex = current;
+      const exportPhoto = photos[exportIndex];
+      exporting = true;
+      clearTimeout(timer);
+      controls.classList.remove('playing');
       download.disabled = true;
       download.classList.add('busy');
       try {
         await document.fonts?.ready;
         const image = artboard.querySelector('.photo-stage img');
-        const fullUrl = await cachedSharedImage(photos[current], 'full');
+        const fullUrl = await cachedSharedImage(exportPhoto, 'full');
         if (image && image.src !== fullUrl) await loadImageElement(image, fullUrl);
         image?.closest('.photo-stage')?.classList.remove('shared-image-thumbnail', 'shared-image-loading');
         const blob = await toBlob(artboard, { backgroundColor: '#f5f3ed', pixelRatio: 2160 / Math.max(1, artboard.getBoundingClientRect().width), cacheBust: true });
         if (!blob) throw new Error('画布导出失败');
-        downloadBlob(blob, `${safeName(photos[current].file.name)}-stillfolio.png`);
+        downloadBlob(blob, `${safeName(exportPhoto.file.name)}-stillfolio.png`);
       } catch (error) {
         console.error('导出共享画布失败', error);
         const label = download.querySelector('span');
         label.textContent = '导出失败，请重试';
         window.setTimeout(() => { label.textContent = '下载当前画布'; }, 1800);
       } finally {
+        exporting = false;
+        controls.classList.toggle('playing', playing);
+        schedule();
         download.disabled = false;
         download.classList.remove('busy');
       }
     });
     document.addEventListener('visibilitychange', schedule);
     document.addEventListener('keydown', event => {
+      if (exporting) return;
       if (event.key === 'ArrowLeft' && current > 0) { current -= 1; render(); }
       if (event.key === 'ArrowRight' && current < photos.length - 1) { current += 1; render(); }
     });
