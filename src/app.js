@@ -1404,6 +1404,9 @@ async function sendCloudVerificationCode({ button, phoneInput, codeInput, note, 
 
 async function completeCloudConnection(user, { finishOnboarding = false } = {}) {
   cloudUser = user;
+  if (cloudAccountRepository.created) await syncCloudAvatar();
+  else await restoreCloudAvatar();
+  user = cloudUser;
   persistCloudProfile(user);
   renderUserIdentity();
   if (finishOnboarding) closeOnboarding();
@@ -1457,6 +1460,65 @@ document.querySelector('.account-logout').addEventListener('click', async event 
     button.disabled = false;
   }
 });
+let avatarSyncChain = Promise.resolve();
+let avatarEditRevision = 0;
+async function restoreCloudAvatar() {
+  if (!cloudUser) return;
+  if (cloudUser.avatar_type !== 'custom') {
+    persistCloudProfile(cloudUser);
+    return;
+  }
+  const asset = await cloudAccountRepository.request('/sync/avatar');
+  if (!asset) {
+    localStorage.setItem('custom-avatar-enabled', 'false');
+    renderAvatars();
+    return;
+  }
+  const blob = await cloudSyncRepository.downloadAsset(asset);
+  await saveAsset('custom-avatar', blob);
+  if (customAvatarUrl) URL.revokeObjectURL(customAvatarUrl);
+  customAvatarUrl = URL.createObjectURL(blob);
+  localStorage.setItem('custom-avatar-enabled', 'true');
+  renderAvatars();
+}
+
+function syncCloudAvatar() {
+  if (!cloudUser) return Promise.resolve();
+  const owner = cloudUser.id;
+  const revision = ++avatarEditRevision;
+  const profile = localRepositories.profile.load();
+  const blobPromise = profile?.avatarType === 'custom' ? loadAsset('custom-avatar') : Promise.resolve(null);
+  localStorage.setItem('custom-avatar-enabled', String(profile?.avatarType === 'custom' && Boolean(customAvatarUrl)));
+  renderAvatars();
+  localStorage.setItem('pending-avatar-sync', JSON.stringify({owner, profile}));
+  avatarSyncChain = avatarSyncChain.catch(() => {}).then(async () => {
+    if (cloudUser?.id !== owner) return;
+    try {
+      const blob = await blobPromise;
+      if (profile?.avatarType === 'custom') {
+        if (!blob) throw new Error('自定义头像文件不存在，请重新选择');
+        const body = new FormData();
+        body.append('file', blob, blob.name || 'avatar.png');
+        await cloudAccountRepository.request('/sync/avatar', {method: 'POST', body});
+        cloudAccountRepository.user = await cloudAccountRepository.request('/me');
+      } else {
+        await cloudAccountRepository.updateProfile({avatar_type: 'sprite', avatar_value: String(profile?.avatarValue ?? avatarIndex)});
+      }
+      if (cloudUser?.id !== owner) return;
+      cloudUser = cloudAccountRepository.user;
+      if (revision === avatarEditRevision) {
+        localStorage.removeItem('pending-avatar-sync');
+        persistCloudProfile(cloudUser);
+        renderAvatars();
+      }
+    } catch (error) {
+      showAccountMessage(`头像同步失败，联网后将重试：${error.message}`, true);
+      console.warn('头像同步失败', error);
+    }
+  });
+  return avatarSyncChain;
+}
+
 el['avatar-grid'].addEventListener('click', event => {
   const choice = event.target.closest('[data-avatar]');
   if (!choice) return;
@@ -1466,6 +1528,7 @@ el['avatar-grid'].addEventListener('click', event => {
   const profile = localRepositories.profile.load();
   if (profile) localRepositories.profile.save({ ...profile, avatarType: 'sprite', avatarValue: avatarIndex });
   renderAvatars();
+  syncCloudAvatar();
 });
 el['current-avatar-upload'].addEventListener('click', () => el['custom-avatar-input'].click());
 el['custom-avatar-input'].addEventListener('change', async event => {
@@ -1479,6 +1542,7 @@ el['custom-avatar-input'].addEventListener('change', async event => {
   if (profile) localRepositories.profile.save({ ...profile, avatarType: 'custom', avatarValue: 'custom-avatar' });
   renderAvatars();
   event.target.value = '';
+  syncCloudAvatar();
 });
 el['custom-logo-upload'].addEventListener('click', () => el['custom-logo-input'].click());
 el['custom-logo-input'].addEventListener('change', async event => {
@@ -3256,6 +3320,11 @@ Promise.all([assetRestorePromise, cloudRestorePromise]).then(async ([, user]) =>
   renderSyncStatus();
   let remoteCollections = [];
   if (user) {
+    const pending = JSON.parse(localStorage.getItem('pending-avatar-sync') || 'null');
+    if (pending?.owner === user.id) {
+      localRepositories.profile.save(pending.profile);
+      await syncCloudAvatar();
+    } else await restoreCloudAvatar().catch(error => console.warn('恢复云端头像失败', error));
     await flushCloudMutations();
     [, remoteCollections] = await Promise.all([syncLogos(), restoreCloudCollections()]);
     await flushCloudMutations();
@@ -3264,6 +3333,8 @@ Promise.all([assetRestorePromise, cloudRestorePromise]).then(async ([, user]) =>
   if (user) resumeInterruptedCollectionUploads(remoteCollections);
 });
 window.addEventListener('online', async () => {
+  const pending = JSON.parse(localStorage.getItem('pending-avatar-sync') || 'null');
+  if (pending?.owner === cloudUser?.id) await syncCloudAvatar();
   flushCloudMutations();
   const remoteCollections = await restoreCloudCollections();
   resumeInterruptedCollectionUploads(remoteCollections);

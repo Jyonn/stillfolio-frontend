@@ -48,6 +48,12 @@ class CloudAccountRepository {
     });
     this.accessToken = data.access_token;
     this.user = data.user;
+    this.created = Boolean(data.created);
+    return this.user;
+  }
+
+  async updateProfile(profile) {
+    this.user = await this.request('/me', {method: 'PATCH', body: JSON.stringify(profile)});
     return this.user;
   }
 
