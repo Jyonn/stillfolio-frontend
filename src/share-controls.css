@@ -6,7 +6,7 @@
 .shared-header .workspace-title-row { display: flex; align-items: baseline; gap: .8rem; }
 .shared-header h1 { margin: 0; font-family: "Noto Serif SC", serif; font-size: .9rem; font-weight: 500; }
 .shared-header small { color: #918b82; font-size: .48rem; letter-spacing: .14em; }
-.shared-artboard-wrap { width: min(calc(100% - 7rem), calc((100dvh - 6.8rem) * .75)); min-height: 100dvh; align-content: center; padding-top: 3.6rem; }
+.shared-artboard-wrap { width: min(calc(100% - 7rem), calc((100dvh - 6.8rem) * .75)); min-height: 100dvh; align-content: center; margin-inline: auto; padding-top: 3.6rem; }
 .shared-canvas-host { width: 100%; }
 .shared-canvas-tools { position: absolute; z-index: 7; top: calc(50% - min(50vw, (100dvh - 6.8rem) * .375) + 3.6rem); left: calc(100% + .65rem); display: grid; grid-template-columns: 2rem; gap: .55rem; }
 .shared-controls > button { position: relative; width: 2rem; height: 2rem; display: grid !important; grid-column: auto !important; grid-template-columns: none !important; place-items: center; border: 0 !important; padding: 0 !important; background: transparent !important; color: #625e57 !important; cursor: pointer; opacity: .76; transition: opacity .18s ease, color .18s ease, background .18s ease; }
@@ -40,13 +40,13 @@
 }
 @media (max-width: 860px) {
   html, body, #app { min-height: 100%; overflow: auto; }
-  .shared-page { min-height: 100dvh; padding: 0 .75rem; }
+  .shared-page { min-height: 100dvh; padding: 0; }
   .shared-header { right: .75rem; left: .75rem; height: 2.35rem; padding: 0 5.1rem 0 .45rem; background: var(--paper); }
   .shared-header > a { display: none; }
   .shared-header .workspace-title-row { min-width: 0; gap: .55rem; }
   .shared-header h1 { overflow: hidden; font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
   .shared-header small { display: none; }
-  .shared-artboard-wrap { width: min(100%, 42rem); min-height: 100dvh; align-content: center; padding-top: calc(2.35rem + var(--safe-top)); padding-bottom: var(--safe-bottom); }
+  .shared-artboard-wrap { width: min(calc(100% - 1.5rem - var(--safe-left) - var(--safe-right)), 42rem); min-height: 100dvh; align-content: center; margin-inline: auto; padding-top: calc(2.35rem + var(--safe-top)); padding-bottom: var(--safe-bottom); }
   .shared-canvas-tools { top: .25rem; right: .45rem; left: auto; display: flex; gap: .4rem; }
   .shared-controls > button { width: 1.9rem; height: 1.9rem; }
   .shared-progress { margin-top: .75rem; }
