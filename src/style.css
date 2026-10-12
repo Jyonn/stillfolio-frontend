@@ -1100,6 +1100,14 @@ button, a, [role="button"] { touch-action: manipulation; }
 .user-dialog { width: min(35rem, 100%); }
 .user-settings { padding: 0 2rem; }
 .user-settings-home { border-top: 1px solid var(--line); }
+.geocode-quota-summary { padding: .8rem 0; font-size: .65rem; color: #777168; line-height: 1.7; border-bottom: 1px solid var(--line); }
+.geocode-quota-summary.quota-exhausted, .place-resolve-note.error { border: 1px solid #a34732; padding: .8rem; background: #f3e1db; color: #913c29; font-weight: 500; }
+.vip-claim[hidden] { display: none; }
+.vip-claim-note, .place-resolve-note { font-size: .68rem; line-height: 1.7; }
+.place-resolve-row { display: flex; align-items: stretch; gap: .6rem; }
+.place-resolve-row input { min-width: 0; flex: 1; }
+.place-resolve-row button { flex: none; border: 1px solid var(--ink); padding: .5rem .8rem; background: var(--ink); color: var(--paper); cursor: pointer; font: inherit; }
+.place-resolve-row button:disabled { opacity: .4; cursor: not-allowed; }
 .user-settings-home[hidden],
 .user-subpanel[hidden] { display: none; }
 .user-settings-entry {

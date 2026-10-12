@@ -259,6 +259,9 @@ app.innerHTML = `
           <button class="user-settings-entry" type="button" data-user-panel="nickname">
             <span><strong>修改昵称</strong><small class="nickname-setting-current"></small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
+          <p class="geocode-quota-summary" role="status" hidden></p>
+          <button class="user-settings-entry vip-claim" type="button" hidden><span><strong>领取创始 VIP 铭牌</strong><small>前 100 位注册用户 · 每周 100 次免费解析</small></span><span>→</span></button>
+          <p class="vip-claim-note" role="status" hidden></p>
           <button class="user-settings-entry" type="button" data-user-panel="geo">
             <span><strong>地理解析服务</strong><small>高德与 OpenCage 服务 Key</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
@@ -500,6 +503,7 @@ function renderLogoLibrary() {
 }
 
 function showUserPanel(name = '') {
+  if (!name || name === 'geo') refreshGeocodeQuota();
   el['user-settings-home'].hidden = Boolean(name);
   document.querySelectorAll('[data-user-view]').forEach(panel => {
     panel.hidden = panel.dataset.userView !== name;
@@ -514,6 +518,47 @@ function showUserPanel(name = '') {
 }
 
 let cloudUser = null;
+let geocodeQuota = null;
+let quotaRequest = null;
+function renderGeocodeQuota() {
+  const node = document.querySelector('.geocode-quota-summary');
+  node.hidden = !cloudUser;
+  document.querySelector('.vip-claim').hidden = !cloudUser || !geocodeQuota?.vip_eligible;
+  if (!cloudUser) document.querySelector('.vip-claim-note').hidden = true;
+  if (!cloudUser) return;
+  node.textContent = geocodeQuota
+    ? `云端解析剩余 ${geocodeQuota.remaining} 次 · 注册赠送 ${geocodeQuota.grant_remaining} 次${geocodeQuota.is_vip ? ` · 本周 VIP ${geocodeQuota.weekly_remaining}/${geocodeQuota.weekly_limit} 次${geocodeQuota.vip_number ? ` · 铭牌 #${String(geocodeQuota.vip_number).padStart(3, '0')}` : ''}` : ''}${geocodeQuota.remaining === 0 ? ' · 额度已用完，请填写个人 API Key' : ''}`
+    : '正在查询云端解析额度…';
+  node.classList.toggle('quota-exhausted', geocodeQuota?.remaining === 0);
+  document.querySelector('.vip-claim').hidden = !geocodeQuota?.vip_eligible;
+}
+async function refreshGeocodeQuota() {
+  if (!cloudUser) { geocodeQuota = null; renderGeocodeQuota(); return; }
+  if (quotaRequest) return quotaRequest;
+  const owner = cloudUser.id;
+  renderGeocodeQuota();
+  quotaRequest = cloudAccountRepository.request('/geocode/quota').then(quota => {
+    if (cloudUser?.id === owner) { geocodeQuota = quota; renderGeocodeQuota(); }
+  }).catch(() => {
+    if (cloudUser?.id === owner) document.querySelector('.geocode-quota-summary').textContent = '暂时无法查询云端解析额度，重新打开设置可重试';
+  }).finally(() => { quotaRequest = null; });
+  return quotaRequest;
+}
+document.querySelector('.vip-claim').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  const note = document.querySelector('.vip-claim-note');
+  const owner = cloudUser?.id;
+  button.disabled = true;
+  try {
+    const quota = await cloudAccountRepository.request('/vip/claim', {method: 'POST'});
+    if (cloudUser?.id !== owner) return;
+    geocodeQuota = quota;
+    renderGeocodeQuota();
+    note.textContent = `已领取创始 VIP 铭牌 #${String(quota.vip_number).padStart(3, '0')}，每周一更新额度`;
+    note.hidden = false;
+  } catch (error) { note.textContent = error.message; note.hidden = false; }
+  finally { button.disabled = false; }
+});
 let codeCooldownTimer = null;
 const syncTasks = new Map();
 const syncPhotoSnapshots = new Map();
@@ -1748,13 +1793,15 @@ function renderInfoForm(type, draftValues = null) {
   if (!item) return;
   const values = draftValues || infoValues(type, item);
   const fields = Object.fromEntries(INFO_FIELDS[type].map(field => [field[0], field]));
-  const fieldMarkup = ([key, label, inputType]) => `
+  const fieldMarkup = ([key, label, inputType]) => key === 'place' ? `
+    <label class="info-field field-place"><span>${label}</span><span class="place-resolve-row"><input name="place" type="text" value="${escapeHtml(String(values.place || ''))}"><button type="button" data-resolve-place>解析</button></span></label>` : `
     <label class="info-field field-${key}"><span>${label}</span><input name="${key}" type="${inputType}"${inputType === 'number' ? ` step="${key === 'focalLength' ? '1' : key === 'exposure' ? '0.0001' : 'any'}"` : inputType === 'time' ? ' step="1"' : ''} value="${escapeHtml(String(values[key] ?? ''))}"></label>`;
   document.querySelector('#info-dialog-title').textContent = `编辑${INFO_LABELS[type]}`;
   el['info-form'].innerHTML = `
     <div class="info-fields">${INFO_FIELD_ROWS[type].map(row => `
       <div class="info-field-row${row.keys.length === 2 ? ` two-column${row.fixed ? ' fixed-columns' : ''}` : ''}">${row.keys.map(key => fieldMarkup(fields[key])).join('')}</div>`).join('')}
     </div>
+    ${type === 'location' ? '<p class="place-resolve-note" role="alert" hidden></p>' : ''}
     ${type === 'location' ? `<section class="info-location-reference">
       <span class="location-label">位置参考照片</span>
       <button class="location-drop" data-location-drop type="button">
@@ -1766,7 +1813,37 @@ function renderInfoForm(type, draftValues = null) {
     </section>` : ''}
     ${candidateMarkup(type)}
     <footer class="info-form-footer"><button type="button" data-info-cancel>取消</button><button type="submit">保存修改</button></footer>`;
+  if (type === 'location') updateResolveButton();
 }
+
+function updateResolveButton() {
+  const form = el['info-form'];
+  const button = form.querySelector('[data-resolve-place]');
+  if (!button) return;
+  const lat = form.elements.namedItem('latitude').value;
+  const lng = form.elements.namedItem('longitude').value;
+  button.disabled = button.dataset.busy === 'true' || lat.trim() === '' || lng.trim() === '' || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng)) || Math.abs(Number(lat)) > 90 || Math.abs(Number(lng)) > 180;
+}
+el['info-form'].addEventListener('input', updateResolveButton);
+el['info-form'].addEventListener('click', async event => {
+  const button = event.target.closest('[data-resolve-place]');
+  if (!button || button.disabled) return;
+  const form = el['info-form'];
+  const lat = form.elements.namedItem('latitude').value;
+  const lng = form.elements.namedItem('longitude').value;
+  const note = form.querySelector('.place-resolve-note');
+  button.dataset.busy = 'true'; button.disabled = true; button.textContent = '解析中…';
+  note.hidden = true;
+  try {
+    const place = await resolveCoordinates(geoService, lat, lng);
+    if (!button.isConnected || form.elements.namedItem('latitude').value !== lat || form.elements.namedItem('longitude').value !== lng) return;
+    form.elements.namedItem('place').value = place;
+    note.textContent = '已填入位置文本，保存修改后生效'; note.classList.remove('error'); note.hidden = false;
+  } catch (error) {
+    if (button.isConnected) { note.textContent = error.message; note.classList.add('error'); note.hidden = false; }
+    refreshGeocodeQuota();
+  } finally { button.dataset.busy = 'false'; button.textContent = '解析'; updateResolveButton(); }
+});
 
 function openInfoModal(type) {
   if (canvasLocked || !INFO_FIELDS[type] || !photos[current]) return;
@@ -1998,6 +2075,7 @@ async function applyReferenceLocation(file) {
     el['info-form'].elements.namedItem('longitude').value = fixedCoordinate(referenceExif.longitude);
     el['info-form'].elements.namedItem('place').value = '';
     pendingLocationSource = file.name;
+    updateResolveButton();
     status.textContent = `已读取 ${file.name} 的位置，请保存修改`;
   } catch {
     status.textContent = '无法读取参考图，请使用带 GPS 的原始照片。';
@@ -2192,6 +2270,36 @@ el.photo.addEventListener('dragstart', event => event.preventDefault());
 
 const placeResolutionTasks = new Map();
 
+async function resolveCoordinates(service, lat, lng) {
+  const key = service === 'amap' ? el['amap-key'].value.trim() : el['opencage-key'].value.trim();
+  if (key) {
+    try {
+      const url = service === 'amap'
+        ? `https://restapi.amap.com/v3/geocode/regeo?key=${encodeURIComponent(key)}&location=${lng},${lat}&extensions=base`
+        : `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(`${lat},${lng}`)}&key=${encodeURIComponent(key)}&language=en&no_annotations=1&no_record=1`;
+      const response = await fetch(url, {signal: AbortSignal.timeout(12000)});
+      const data = await response.json();
+      const place = service === 'amap'
+        ? (data.status === '1' ? data.regeocode?.formatted_address : '')
+        : (data.status?.code === 200 ? data.results?.[0]?.formatted : '');
+      if (!response.ok || !place) throw new Error('个人 API Key 解析失败');
+      return place;
+    } catch (error) {
+      if (!cloudUser) throw new Error('个人 API Key 解析失败，请检查 Key 或连接云端账户');
+    }
+  }
+  if (!cloudUser) throw new Error('请填写个人 API Key 或连接云端账户后解析');
+  const owner = cloudUser.id;
+  try {
+    const data = await cloudAccountRepository.request('/geocode/reverse', {
+      method: 'POST', body: JSON.stringify({service, latitude: Number(lat).toFixed(6), longitude: Number(lng).toFixed(6)}),
+    });
+    if (cloudUser?.id !== owner) throw new Error('账户已变更，请重新解析');
+    geocodeQuota = data.quota; renderGeocodeQuota();
+    return data.place;
+  } catch (error) { refreshGeocodeQuota(); throw error; }
+}
+
 async function updatePlace() {
   const item = photos[current];
   if (!item) return;
@@ -2205,29 +2313,31 @@ async function updatePlace() {
   if (!locationModeShowsPlace()) return;
   if (item.placeEditedByService[service]) return;
   const key = service === 'amap' ? el['amap-key'].value.trim() : el['opencage-key'].value.trim();
-  if (!key || item.place) return;
-  const taskKey = `${item.id}:${service}`;
+  if (item.place) return;
+  if (!key && !cloudUser) return;
+  const owner = cloudUser?.id;
+  const taskKey = `${item.id}:${service}:${lat}:${lng}`;
   if (placeResolutionTasks.has(taskKey)) return placeResolutionTasks.get(taskKey);
   const task = (async () => {
     try {
-      const url = service === 'amap'
-        ? `https://restapi.amap.com/v3/geocode/regeo?key=${encodeURIComponent(key)}&location=${lng},${lat}&extensions=base`
-        : `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(`${lat},${lng}`)}&key=${encodeURIComponent(key)}&language=en&no_annotations=1&no_record=1`;
-      const data = await fetch(url).then(r => r.json());
-      const resolved = service === 'amap'
-        ? (data.status === '1' && (data.regeocode.formatted_address || [data.regeocode.addressComponent.city, data.regeocode.addressComponent.district].flat().filter(Boolean).join(' · ')))
-        : data.results?.[0]?.formatted;
-      if (!resolved || item.placeEditedByService[service]) return;
+      const resolved = await resolveCoordinates(service, lat, lng);
+      if (cloudUser?.id !== owner) return;
+      if (!resolved || item.placeEditedByService[service] || item.exif.latitude !== lat || item.exif.longitude !== lng) return;
       item.places[service] = resolved;
       item.place = resolved;
       await savePhoto(item);
       queuePhotoMetadata(item);
       if (photos[current] === item && geoService === service) {
-        applyLocationVisibility(activeSlide, item);
+        updateDisplaySlots(item);
+        updateCropMode(item);
         el.meta.innerHTML = metaRows(item);
       }
-    } catch {
+    } catch (error) {
+      console.warn('位置解析失败', error.message);
       applyLocationVisibility(activeSlide, item);
+      if (photos[current] === item && geoService === service) {
+        el.place.textContent = error.message || '位置解析失败，请稍后重试';
+      }
     } finally {
       placeResolutionTasks.delete(taskKey);
     }
