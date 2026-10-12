@@ -1,5 +1,6 @@
 import './style.css';
 import { debugLog, debugError } from './debug-log.js';
+import { independentPhotoFile } from './photo-file.js';
 import { parseExif } from './exif.js';
 import { createCollection, loadAsset, loadAssets, loadCollections, loadPhotos, localRepositories, photoId, removeAsset, removePhoto, saveAsset, saveCollections, savePhoto } from './repositories/local.js';
 import { cloudAccountRepository } from './repositories/cloud.js';
@@ -767,7 +768,7 @@ function renderSyncStatus() {
   const detailRunning = detailTask?.phase === 'running';
   const autoSyncControl = detailCollection?.storageMode === 'cloud' ? `<label class="collection-auto-sync"><input type="checkbox" data-auto-sync-collection="${escapeHtml(detailCollection.id)}" ${detailCollection.autoSyncNewPhotos !== false ? 'checked' : ''}><span>自动同步新添加的照片</span></label>` : '';
   const collectionDetail = detailCollection?.storageMode === 'cloud' ? `<section class="collection-sync-detail${syncPanelMode === 'collection' && !detailRunning ? ' compact' : ''}">
-      ${syncPanelMode === 'collection' && !detailRunning ? autoSyncControl : `
+      ${syncPanelMode === 'collection' && !detailRunning && detailTask?.phase !== 'error' ? autoSyncControl : `
       <div class="collection-sync-summary"><div><strong>${escapeHtml(detailCollection.name)}</strong><small>${syncedCount}/${activeRecords.length} 张照片已同步</small></div><span>${activeRecords.length ? Math.round(syncedCount / activeRecords.length * 100) : 100}%</span></div>
       <i style="--sync-progress:${activeRecords.length ? Math.round(syncedCount / activeRecords.length * 100) : 100}%"></i>
       ${autoSyncControl}
@@ -802,9 +803,9 @@ function renderPhotoSyncStatus(item = photos[current]) {
   const cloudCollection = activeCollection()?.storageMode === 'cloud';
   el['photo-sync'].hidden = !cloudCollection || !item;
   if (!cloudCollection || !item) return;
-  const status = item.cloudSyncStatus || 'success';
+  const status = item.cloudSyncStatus || 'pending';
   el['photo-sync'].dataset.status = status;
-  const labels = { syncing: '当前照片正在同步', failed: '当前照片同步失败', success: '当前照片已同步' };
+  const labels = { syncing: '当前照片正在同步', failed: '当前照片同步失败', success: '当前照片已同步', pending: '当前照片等待同步' };
   el['photo-sync'].title = labels[status] || labels.success;
   el['photo-sync'].setAttribute('aria-label', el['photo-sync'].title);
 }
@@ -1019,10 +1020,12 @@ function setPhotoCloudStatus(record, status, updatedAt = record.cloudUpdatedAt) 
 async function uploadCollectionRecords(collection, allRecords, pendingRecords) {
   debugLog('上传队列准备', {total: allRecords.length, pending: pendingRecords.length});
   const key = `collection:${collection.id}`;
+  try {
   syncPhotoSnapshots.set(collection.id, allRecords);
   for (const record of pendingRecords) {
     setPhotoCloudStatus(record, 'syncing');
-    await savePhoto(record);
+    try { await savePhoto(record); }
+    catch (error) { debugLog('上传前状态保存失败，继续检查原文件', debugError(error)); }
   }
   let completed = allRecords.filter(record => record.cloudSyncStatus === 'success').length;
   setSyncTask(key, { kind: 'collection', direction: 'upload', phase: pendingRecords.length ? 'running' : 'success', current: completed, total: allRecords.length });
@@ -1037,9 +1040,11 @@ async function uploadCollectionRecords(collection, allRecords, pendingRecords) {
       if (cloudUser) cloudMutationQueue.remove(cloudUser.id, `photo:${record.id}`);
     } catch (error) {
       setPhotoCloudStatus(record, 'failed');
-      await savePhoto(record);
+      for (const waiting of pendingRecords) if (waiting.cloudSyncStatus === 'syncing') setPhotoCloudStatus(waiting, 'pending');
       setSyncTask(key, { phase: 'error', error: error.message, current: completed, total: allRecords.length });
       renderPhotoSyncStatus();
+      try { await savePhoto(record); }
+      catch (saveError) { debugLog('失败状态未能写入本地，已退出上传', debugError(saveError)); }
       return false;
     }
   }
@@ -1047,6 +1052,12 @@ async function uploadCollectionRecords(collection, allRecords, pendingRecords) {
   setSyncTask(key, { phase: 'success', current: completed, total: allRecords.length });
   renderPhotoSyncStatus();
   return true;
+  } catch (error) {
+    for (const record of pendingRecords) if (record.cloudSyncStatus === 'syncing') setPhotoCloudStatus(record, 'pending');
+    setSyncTask(key, {kind: 'collection', phase: 'error', error: error.message || '同步失败，请重新选择原照片', total: allRecords.length});
+    renderPhotoSyncStatus();
+    return false;
+  }
 }
 
 async function syncCollectionToCloud(collectionId) {
@@ -1070,10 +1081,6 @@ async function syncCollectionToCloud(collectionId) {
       await savePhoto(record);
     }
     const pendingRecords = records.filter(record => !remoteIds.has(record.id));
-    for (const record of pendingRecords) {
-      setPhotoCloudStatus(record, 'syncing');
-      await savePhoto(record);
-    }
     syncPhotoSnapshots.set(collection.id, records);
     renderSyncStatus();
     const candidates = loadInfoCandidatesFor(collection.id);
@@ -2780,7 +2787,8 @@ async function addFiles(fileList) {
   const files = [...fileList].filter(f => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
   if (!files.length) return;
   const importStartedAt = Date.now();
-  const results = await Promise.allSettled(files.map(async (file, fileIndex) => {
+  const results = await Promise.allSettled(files.map(async (source, fileIndex) => {
+    const file = await independentPhotoFile(source);
     const exif = await parseExif(file);
     const preview = await createPreview(file);
     const url = URL.createObjectURL(preview);
@@ -2808,6 +2816,15 @@ async function addFiles(fileList) {
   }
   const existing = new Set(photos.map(item => item.id));
   const fresh = loaded.filter(item => !existing.has(item.id));
+  const repaired = [];
+  for (const replacement of loaded.filter(item => existing.has(item.id))) {
+    const original = photos.find(item => item.id === replacement.id);
+    // Preserve metadata/crop edits; replace only the newly selected image bytes.
+    const updated = {...original, file: replacement.file, cloudSyncStatus: original.cloudSyncStatus === 'success' ? 'success' : 'pending'};
+    await savePhoto(updated);
+    Object.assign(original, updated);
+    repaired.push(original);
+  }
   const collection = activeCollection();
   if (collection?.storageMode === 'cloud') {
     fresh.forEach(item => { item.cloudSyncStatus = collection.autoSyncNewPhotos === false ? 'pending' : 'syncing'; });
@@ -2817,7 +2834,7 @@ async function addFiles(fileList) {
   await Promise.all(fresh.map(savePhoto));
   if (fresh.length) renderCollections();
   if (fresh.length) show(photos.length - fresh.length);
-  if (fresh.length && collection?.storageMode === 'cloud' && collection.autoSyncNewPhotos !== false && cloudUser) uploadNewPhotosToCloud(collection, fresh);
+  if ((fresh.length || repaired.length) && collection?.storageMode === 'cloud' && collection.autoSyncNewPhotos !== false && cloudUser) uploadNewPhotosToCloud(collection, [...fresh, ...repaired]);
 }
 
 function isHeic(file) {
