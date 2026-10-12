@@ -220,7 +220,7 @@ export async function renderSharedCollection(token) {
         const fullUrl = await cachedSharedImage(exportPhoto, 'full');
         if (image && image.src !== fullUrl) await loadImageElement(image, fullUrl);
         image?.closest('.photo-stage')?.classList.remove('shared-image-thumbnail', 'shared-image-loading');
-        const blob = await toBlob(artboard, { backgroundColor: '#f5f3ed', pixelRatio: 2160 / Math.max(1, artboard.getBoundingClientRect().width), cacheBust: true });
+        const blob = await toBlob(artboard, { backgroundColor: '#f5f3ed', pixelRatio: 2160 / Math.max(1, artboard.getBoundingClientRect().width) });
         if (!blob) throw new Error('画布导出失败');
         downloadBlob(blob, `${safeName(exportPhoto.file.name)}-stillfolio.png`);
       } catch (error) {
