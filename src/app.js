@@ -1,4 +1,5 @@
 import './style.css';
+import { debugLog } from './debug-log.js';
 import { parseExif } from './exif.js';
 import { createCollection, loadAsset, loadAssets, loadCollections, loadPhotos, localRepositories, photoId, removeAsset, removePhoto, saveAsset, saveCollections, savePhoto } from './repositories/local.js';
 import { cloudAccountRepository } from './repositories/cloud.js';
@@ -679,6 +680,7 @@ function renderUserIdentity() {
 }
 
 function setSyncTask(key, next) {
+  debugLog('同步进度更新', {kind: next.kind, phase: next.phase, current: next.current, total: next.total});
   syncTasks.set(key, { ...(syncTasks.get(key) || {}), ...next });
   renderSyncStatus();
 }
@@ -975,6 +977,7 @@ function setPhotoCloudStatus(record, status, updatedAt = record.cloudUpdatedAt) 
 }
 
 async function uploadCollectionRecords(collection, allRecords, pendingRecords) {
+  debugLog('上传队列准备', {total: allRecords.length, pending: pendingRecords.length});
   const key = `collection:${collection.id}`;
   syncPhotoSnapshots.set(collection.id, allRecords);
   for (const record of pendingRecords) {
@@ -985,6 +988,7 @@ async function uploadCollectionRecords(collection, allRecords, pendingRecords) {
   setSyncTask(key, { kind: 'collection', direction: 'upload', phase: pendingRecords.length ? 'running' : 'success', current: completed, total: allRecords.length });
   for (const record of pendingRecords) {
     try {
+      debugLog('开始上传下一张', {number: completed + 1, total: allRecords.length, bytes: record.file?.size});
       const asset = await cloudSyncRepository.uploadPhoto(collection.cloudId, record);
       setPhotoCloudStatus(record, 'success', Date.parse(asset.updated_at) || Date.now());
       await savePhoto(record);

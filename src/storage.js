@@ -1,3 +1,4 @@
+import { debugLog, debugId } from './debug-log.js';
 const DB_NAME = 'jyonn-photo-archive';
 const DB_VERSION = 2;
 const STORE = 'photos';
@@ -13,6 +14,7 @@ function openDatabase() {
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
+    request.onblocked = () => debugLog('IndexedDB 打开被阻塞');
   });
 }
 
@@ -32,6 +34,9 @@ export function photoId(file, collectionId = 'default') {
 }
 
 export async function savePhoto(item) {
+  const trace = debugId(), start = performance.now();
+  debugLog('照片本地保存开始', {trace, state: item.cloudSyncStatus || 'local', bytes: item.file?.size});
+  const slow = setTimeout(() => debugLog('照片本地保存等待超过15秒', {trace}), 15000);
   const record = {
     id: item.id,
     collectionId: item.collectionId,
@@ -53,7 +58,11 @@ export async function savePhoto(item) {
     cloudDeleted: Boolean(item.cloudDeleted),
     createdAt: item.createdAt,
   };
-  await transaction('readwrite', store => store.put(record));
+  try {
+    await transaction('readwrite', store => store.put(record));
+    debugLog('照片本地保存完成', {trace, ms: Math.round(performance.now() - start)});
+  } catch (error) { debugLog('照片本地保存失败', {trace, type: error.name}); throw error; }
+  finally { clearTimeout(slow); }
 }
 
 export async function removePhoto(id) {

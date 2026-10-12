@@ -1,17 +1,29 @@
 import { apiUrl } from '../api-origin.js';
+import { debugLog, debugId } from '../debug-log.js';
 
 class CloudAccountRepository {
   accessToken = '';
   user = null;
 
   async request(path, options = {}) {
+    const id = debugId(), started = performance.now();
+    const safePath = path.split('?')[0];
+    debugLog('请求开始', {id, method: options.method || 'GET', path: safePath});
+    const slow = setTimeout(() => debugLog('请求等待超过15秒', {id, path: safePath}), 15000);
+    try {
     const headers = { ...(options.headers || {}) };
     if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
     if (this.accessToken) headers.Authorization = `Bearer ${this.accessToken}`;
     const response = await fetch(apiUrl(`/api/v1${path}`), { credentials: 'include', ...options, headers });
+    debugLog('响应头收到', {id, status: response.status, ms: Math.round(performance.now() - started)});
     const data = options.raw ? await response.blob() : response.status === 204 ? null : await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data?.detail || '云端服务请求失败');
+    debugLog('响应读取完成', {id, ms: Math.round(performance.now() - started), photos: Array.isArray(data?.photos) ? data.photos.length : undefined});
     return data;
+    } catch (error) {
+      debugLog('请求失败', {id, type: error.name, ms: Math.round(performance.now() - started)});
+      throw error;
+    } finally { clearTimeout(slow); }
   }
 
   async restore() {
