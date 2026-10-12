@@ -843,6 +843,8 @@ button { color: inherit; }
 .sync-confirm-modal,
 .share-modal,
 .collection-modal,
+.collection-settings-modal,
+.collection-delete-modal,
 .info-modal {
   position: fixed;
   z-index: 100;
@@ -860,6 +862,8 @@ button { color: inherit; }
 .sync-confirm-modal.open,
 .share-modal.open,
 .collection-modal.open,
+.collection-settings-modal.open,
+.collection-delete-modal.open,
 .info-modal.open { opacity: 1; visibility: visible; transition-delay: 0s; }
 .display-modal-backdrop,
 .user-modal-backdrop,
@@ -867,6 +871,8 @@ button { color: inherit; }
 .sync-confirm-backdrop,
 .share-modal-backdrop,
 .collection-modal-backdrop,
+.collection-settings-backdrop,
+.collection-delete-backdrop,
 .info-modal-backdrop { position: absolute; inset: 0; background: rgb(32 31 27 / 46%); }
 .display-dialog,
 .user-dialog,
@@ -924,6 +930,18 @@ button { color: inherit; }
 .collection-dialog .collection-form-cancel { background: transparent; }
 .collection-dialog .collection-form-save,
 .collection-dialog .collection-form-save:hover { background: var(--ink); color: var(--paper); }
+.collection-settings-dialog { position: relative; width: min(25rem, 100%); background: var(--paper); box-shadow: 0 2rem 8rem rgb(32 31 27 / 28%); }
+.collection-settings-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid var(--line); padding: 1.6rem 1.8rem 1.3rem; }
+.collection-settings-dialog .eyebrow { margin-bottom: .55rem; }
+.collection-settings-dialog h2 { margin: 0; font-family: "Noto Serif SC", serif; font-size: 1.35rem; font-weight: 500; }
+.collection-settings-close { border: 0; padding: .1rem; background: transparent; color: #777168; cursor: pointer; font-size: 1.35rem; font-weight: 300; }
+.collection-settings-actions { padding: .45rem 1.8rem 1.25rem; }
+.collection-settings-actions button { width: 100%; display: flex; align-items: center; justify-content: space-between; border: 0; border-bottom: 1px solid var(--line); padding: 1rem 0; background: transparent; color: var(--ink); cursor: pointer; font-size: .72rem; text-align: left; }
+.collection-settings-actions button:hover { padding-left: .35rem; padding-right: .2rem; background: rgb(32 31 27 / 3%); }
+.collection-settings-actions svg { width: .8rem; fill: none; stroke: currentColor; stroke-width: 1.35; }
+.collection-settings-actions .collection-delete-action { color: #864b42; }
+.collection-delete-cancel { background: transparent; color: var(--ink); }
+.collection-delete-confirm { background: #7c443b; color: var(--paper); }
 .display-settings-list { padding: 0 2rem; }
 .display-setting-row {
   display: grid;
@@ -1187,9 +1205,9 @@ button { color: inherit; }
   }
   .workspace-title-row { min-width: 0; display: flex; align-items: center; gap: .65rem; }
   .workspace-heading h1 { max-width: 28rem; margin: 0; overflow: hidden; font-family: "Noto Serif SC", serif; font-size: .9rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-  .collection-edit { width: 1.7rem; height: 1.7rem; display: grid; flex: 0 0 auto; place-items: center; border: 0; padding: 0; background: transparent; color: #918b82; cursor: pointer; }
-  .collection-edit:hover { color: var(--ink); background: rgb(32 31 27 / 5%); }
-  .collection-edit svg { width: .8rem; fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: square; stroke-linejoin: miter; }
+  .collection-settings-trigger { width: 1.7rem; height: 1.7rem; display: grid; flex: 0 0 auto; place-items: center; border: 0; padding: 0; background: transparent; color: #918b82; cursor: pointer; }
+  .collection-settings-trigger:hover { color: var(--ink); background: rgb(32 31 27 / 5%); }
+  .collection-settings-trigger svg { width: .78rem; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
   .panel .actions {
     position: fixed;
     z-index: 7;
@@ -1341,8 +1359,8 @@ button { color: inherit; }
   }
   .workspace-title-row { min-width: 0; display: flex; align-items: center; gap: .35rem; }
   .workspace-heading h1 { min-width: 0; margin: 0; overflow: hidden; font-family: "Noto Serif SC", serif; font-size: .72rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-  .collection-edit { width: 1.5rem; height: 1.5rem; display: grid; flex: 0 0 auto; place-items: center; border: 0; padding: 0; background: transparent; color: #918b82; }
-  .collection-edit svg { width: .7rem; fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: square; stroke-linejoin: miter; }
+  .collection-settings-trigger { width: 1.5rem; height: 1.5rem; display: grid; flex: 0 0 auto; place-items: center; border: 0; padding: 0; background: transparent; color: #918b82; }
+  .collection-settings-trigger svg { width: .7rem; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
   .rail-user {
     display: none;
   }

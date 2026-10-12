@@ -44,7 +44,7 @@ app.innerHTML = `
     <section class="artboard-wrap" aria-label="照片画布">
       <button class="mobile-library-back" type="button" aria-label="返回作品集" title="返回作品集"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button>
       <header class="workspace-heading">
-        <div class="workspace-title-row"><h1 class="workspace-collection-name">光抵达的地方</h1><button class="collection-edit" type="button" aria-label="重命名作品集" title="重命名作品集"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 16-1 4 4-1L19 8l-3-3zM14 7l3 3"/></svg></button></div>
+        <div class="workspace-title-row"><button class="collection-settings-trigger" type="button" aria-label="作品集设置" title="作品集设置"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.86 2.86-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.55v-.09A1.7 1.7 0 0 0 8.5 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.86-2.86.06-.06A1.7 1.7 0 0 0 4.1 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.3V9.55h.09A1.7 1.7 0 0 0 4.1 8.5a1.7 1.7 0 0 0-.34-1.88l-.06-.06L6.56 3.7l.06.06A1.7 1.7 0 0 0 8.5 4.1a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2.3h4.05v.09A1.7 1.7 0 0 0 15 4.1a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.86 2.86-.06.06A1.7 1.7 0 0 0 19.4 8.5a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1v4.05h-.09A1.7 1.7 0 0 0 19.4 15Z"/></svg></button><h1 class="workspace-collection-name">光抵达的地方</h1></div>
       </header>
       <div class="carousel-viewport">
         <div class="carousel-track">
@@ -187,6 +187,25 @@ app.innerHTML = `
       </form>
     </section>
   </div>
+  <div class="collection-settings-modal" aria-hidden="true">
+    <div class="collection-settings-backdrop"></div>
+    <section class="collection-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="collection-settings-title">
+      <header><div><p class="eyebrow">PHOTO FOLIO</p><h2 id="collection-settings-title">作品集设置</h2></div><button class="collection-settings-close" type="button" aria-label="关闭作品集设置">×</button></header>
+      <div class="collection-settings-actions">
+        <button class="collection-rename-action" type="button"><span>重命名作品集</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+        <button class="collection-delete-action" type="button"><span>删除作品集</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+      </div>
+    </section>
+  </div>
+  <div class="collection-delete-modal" aria-hidden="true">
+    <div class="collection-delete-backdrop"></div>
+    <section class="delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="collection-delete-title" aria-describedby="collection-delete-copy">
+      <p class="eyebrow">DELETE PHOTO FOLIO</p>
+      <h2 id="collection-delete-title">删除这个作品集？</h2>
+      <p id="collection-delete-copy">作品集中的照片、编辑信息与候选库都会被删除，此操作无法撤销。</p>
+      <div class="delete-dialog-actions"><button class="collection-delete-cancel" type="button">取消</button><button class="collection-delete-confirm" type="button">确认删除</button></div>
+    </section>
+  </div>
   <div class="display-modal" aria-hidden="true">
     <div class="display-modal-backdrop"></div>
     <section class="display-dialog" role="dialog" aria-modal="true" aria-labelledby="display-dialog-title">
@@ -307,7 +326,7 @@ app.innerHTML = `
     </section>
   </div>`;
 
-const el = Object.fromEntries(['photo','empty','place','coordinates','meta','picker','select','customize','collection-sync','collection-share','photo-sync','user-menu','mobile-user-menu','mobile-library-back','mobile-collection-list','mobile-collection-new','carousel-viewport','carousel-track','folio-nav','technical','export-run','export-menu','delete-current','canvas-lock','canvas-info','canvas-info-panel','canvas-info-close','canvas-sync-panel','canvas-sync-close','sync-status-body','amap-key','opencage-key','service-key-amap','service-key-opencage','crop-hint','crop-mode-control','display-modal','display-settings-list','display-modal-close','display-cancel','display-apply','user-modal','user-modal-close','user-settings-home','avatar-grid','current-avatar-upload','custom-avatar-input','custom-logo-upload','custom-logo-input','logo-library','user-done','info-modal','info-modal-close','info-form','delete-modal','delete-modal-cancel','delete-modal-confirm','sync-confirm-modal','sync-confirm-cancel','sync-confirm-submit','share-modal','share-modal-close','share-qr','share-link','share-copy-button','collection-modal','collection-edit','collection-trigger','collection-name','workspace-collection-name','collection-menu','collection-list','collection-form','collection-input','collection-form-cancel','collection-new'].map(c => [c, document.querySelector(`.${c}`)]));
+const el = Object.fromEntries(['photo','empty','place','coordinates','meta','picker','select','customize','collection-sync','collection-share','photo-sync','user-menu','mobile-user-menu','mobile-library-back','mobile-collection-list','mobile-collection-new','carousel-viewport','carousel-track','folio-nav','technical','export-run','export-menu','delete-current','canvas-lock','canvas-info','canvas-info-panel','canvas-info-close','canvas-sync-panel','canvas-sync-close','sync-status-body','amap-key','opencage-key','service-key-amap','service-key-opencage','crop-hint','crop-mode-control','display-modal','display-settings-list','display-modal-close','display-cancel','display-apply','user-modal','user-modal-close','user-settings-home','avatar-grid','current-avatar-upload','custom-avatar-input','custom-logo-upload','custom-logo-input','logo-library','user-done','info-modal','info-modal-close','info-form','delete-modal','delete-modal-cancel','delete-modal-confirm','sync-confirm-modal','sync-confirm-cancel','sync-confirm-submit','share-modal','share-modal-close','share-qr','share-link','share-copy-button','collection-modal','collection-settings-trigger','collection-settings-modal','collection-settings-close','collection-rename-action','collection-delete-action','collection-delete-modal','collection-delete-cancel','collection-delete-confirm','collection-trigger','collection-name','workspace-collection-name','collection-menu','collection-list','collection-form','collection-input','collection-form-cancel','collection-new'].map(c => [c, document.querySelector(`.${c}`)]));
 let { collections, activeId: activeCollectionId } = loadCollections(DEFAULT_DISPLAY_SETTINGS);
 let displaySettings = cloneDisplaySettings(collections.find(item => item.id === activeCollectionId)?.settings || DEFAULT_DISPLAY_SETTINGS);
 saveCollections(collections, activeCollectionId);
@@ -927,25 +946,19 @@ el['sync-status-body'].addEventListener('click', event => {
   const collectionButton = event.target.closest('[data-sync-collection]');
   if (collectionButton) requestCollectionSync(collectionButton.dataset.syncCollection);
   const deleteButton = event.target.closest('[data-delete-cloud-collection]');
-  if (deleteButton) {
-    if (deleteButton.dataset.confirm !== 'true') {
-      deleteButton.dataset.confirm = 'true';
-      deleteButton.textContent = '确认删除';
-      window.setTimeout(() => { if (deleteButton.isConnected) { deleteButton.dataset.confirm = ''; deleteButton.textContent = '删除'; } }, 5000);
-    } else {
-      deleteCloudCollection(deleteButton.dataset.deleteCloudCollection);
-    }
-  }
+  if (deleteButton) openCollectionDeleteConfirmation(deleteButton.dataset.deleteCloudCollection);
   if (event.target.closest('[data-sync-mutations]')) flushCloudMutations();
   if (event.target.closest('[data-sync-logos]')) syncLogos();
 });
 
-async function deleteCloudCollection(collectionId) {
+async function deleteCollection(collectionId) {
   const collection = collections.find(item => item.id === collectionId);
   const ownerId = collectionCloudOwner(collection);
-  if (!collection?.cloudId || !ownerId) return;
-  cloudMutationQueue.put(ownerId, `delete-collection:${collection.id}`, 'delete-collection', { cloudId: collection.cloudId });
-  setSyncTask('mutations', { kind: 'mutation', phase: 'running', total: cloudMutationQueue.list(ownerId).length });
+  if (!collection) return;
+  if (collection.cloudId && ownerId) {
+    cloudMutationQueue.put(ownerId, `delete-collection:${collection.id}`, 'delete-collection', { cloudId: collection.cloudId });
+    setSyncTask('mutations', { kind: 'mutation', phase: 'running', total: cloudMutationQueue.list(ownerId).length });
+  }
   const records = (await loadPhotos()).filter(item => item.collectionId === collection.id);
   await Promise.all(records.map(item => removePhoto(item.id)));
   localStorage.removeItem(`metadata-candidates-v2:${collection.id}`);
@@ -959,7 +972,7 @@ async function deleteCloudCollection(collectionId) {
   renderCollections();
   closeSyncPanel();
   await restoreArchive();
-  flushCloudMutations();
+  if (collection.cloudId && ownerId) flushCloudMutations();
 }
 
 function closeSyncConfirmation() {
@@ -2099,7 +2112,9 @@ el['display-apply'].addEventListener('click', () => {
 });
 document.addEventListener('keydown', event => {
   if (event.key !== 'Escape') return;
-  if (el['collection-modal'].classList.contains('open')) closeCollectionForm();
+  if (el['collection-delete-modal'].classList.contains('open')) closeCollectionDeleteConfirmation();
+  else if (el['collection-settings-modal'].classList.contains('open')) closeCollectionSettings();
+  else if (el['collection-modal'].classList.contains('open')) closeCollectionForm();
   else if (el['delete-modal'].classList.contains('open')) closeDeleteModal();
   else if (el['display-modal'].classList.contains('open')) closeDisplayModal();
   else if (el['user-modal'].classList.contains('open')) closeUserModal();
@@ -2452,6 +2467,42 @@ function closeCollectionForm() {
   document.body.classList.remove('modal-open');
 }
 
+function openCollectionSettings() {
+  closeCollectionMenu();
+  el['collection-settings-modal'].classList.add('open');
+  el['collection-settings-modal'].setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+  requestAnimationFrame(() => el['collection-rename-action'].focus());
+}
+
+function closeCollectionSettings() {
+  el['collection-settings-modal'].classList.remove('open');
+  el['collection-settings-modal'].setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
+}
+
+function openCollectionDeleteConfirmation(collectionId = activeCollectionId) {
+  const collection = collections.find(item => item.id === collectionId);
+  if (!collection) return;
+  closeCollectionSettings();
+  closeSyncPanel();
+  el['collection-delete-modal'].dataset.collectionId = collection.id;
+  document.querySelector('#collection-delete-title').textContent = `删除“${collection.name}”？`;
+  document.querySelector('#collection-delete-copy').textContent = collection.storageMode === 'cloud'
+    ? '本地缓存、云端照片、编辑信息与候选库都会被永久删除，此操作无法撤销。'
+    : '作品集中的照片、编辑信息与候选库都会从当前设备删除，此操作无法撤销。';
+  el['collection-delete-modal'].classList.add('open');
+  el['collection-delete-modal'].setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+  requestAnimationFrame(() => el['collection-delete-cancel'].focus());
+}
+
+function closeCollectionDeleteConfirmation() {
+  el['collection-delete-modal'].classList.remove('open');
+  el['collection-delete-modal'].setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
+}
+
 el['collection-trigger'].addEventListener('click', () => {
   const open = !el['collection-menu'].classList.contains('open');
   if (!open) return closeCollectionMenu();
@@ -2465,7 +2516,26 @@ el['collection-list'].addEventListener('click', event => {
   if (option) switchCollection(option.dataset.collectionId);
 });
 el['collection-new'].addEventListener('click', () => openCollectionForm());
-el['collection-edit'].addEventListener('click', () => openCollectionForm({ mode: 'rename' }));
+el['collection-settings-trigger'].addEventListener('click', openCollectionSettings);
+el['collection-settings-close'].addEventListener('click', closeCollectionSettings);
+document.querySelector('.collection-settings-backdrop').addEventListener('click', closeCollectionSettings);
+el['collection-rename-action'].addEventListener('click', () => {
+  closeCollectionSettings();
+  openCollectionForm({ mode: 'rename' });
+});
+el['collection-delete-action'].addEventListener('click', () => openCollectionDeleteConfirmation());
+el['collection-delete-cancel'].addEventListener('click', closeCollectionDeleteConfirmation);
+document.querySelector('.collection-delete-backdrop').addEventListener('click', closeCollectionDeleteConfirmation);
+el['collection-delete-confirm'].addEventListener('click', async () => {
+  const collectionId = el['collection-delete-modal'].dataset.collectionId || activeCollectionId;
+  el['collection-delete-confirm'].disabled = true;
+  try {
+    closeCollectionDeleteConfirmation();
+    await deleteCollection(collectionId);
+  } finally {
+    el['collection-delete-confirm'].disabled = false;
+  }
+});
 el['collection-form-cancel'].addEventListener('click', closeCollectionForm);
 document.querySelector('.collection-modal-backdrop').addEventListener('click', closeCollectionForm);
 el['collection-form'].addEventListener('submit', async event => {
