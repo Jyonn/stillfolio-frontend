@@ -1,0 +1,35 @@
+.shared-album {
+  height: 100dvh;
+  min-height: 32rem;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  padding: max(1.2rem, var(--safe-top)) 1.2rem max(.8rem, var(--safe-bottom));
+  background: var(--paper);
+}
+.album-heading { position: relative; text-align: center; padding: .3rem 5rem 1rem; }
+.album-heading > a { position: absolute; left: .3rem; top: .3rem; }
+.album-heading img { width: 5.2rem; height: 2rem; object-fit: contain; }
+.album-heading h1 { margin: 0; font: 500 1.15rem/1.5 "Noto Serif SC", serif; }
+.album-heading p { max-width: 36rem; margin: .4rem auto 0; color: var(--muted); font-size: .65rem; line-height: 1.7; }
+.shared-album .album-stage {
+  width: 100%; min-height: 0; height: 100%; padding: 0;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.album-book { flex: none; box-shadow: 0 16px 40px rgb(43 36 23 / 14%); }
+.album-sheet { background: var(--paper); overflow: hidden; }
+.album-sheet .artboard { width: 100%; box-shadow: none; }
+.shared-album .album-navigation { position: static; display: flex; justify-content: center; align-items: center; gap: .7rem; padding-top: .8rem; }
+.shared-album .album-navigation > button { opacity: 1; width: 2.3rem; height: 2.3rem; font-size: 1.2rem; }
+.album-counter { min-width: 3.6rem; text-align: center; color: var(--muted); font-size: .65rem; letter-spacing: .1em; }
+.album-status { min-height: 1rem; margin: .25rem 0 0; text-align: center; font-size: .6rem; color: var(--muted); }
+.album-export-host { position: fixed; width: 600px; left: -10000px; top: 0; pointer-events: none; }
+.album-export-host .artboard { width: 100%; box-shadow: none; }
+.shared-album.exporting .album-book { pointer-events: none; }
+@media (max-width: 860px) {
+  .shared-album { min-height: 28rem; padding-inline: .4rem; }
+  .album-heading { padding: .4rem 1rem .7rem; }
+  .album-heading > a { position: static; display: block; margin-bottom: .5rem; }
+  .album-heading img { width: 4rem; height: 1.3rem; }
+  .album-heading h1 { font-size: 1rem; }
+  .album-heading p { font-size: .6rem; max-height: 3.4em; overflow: auto; }
+}
