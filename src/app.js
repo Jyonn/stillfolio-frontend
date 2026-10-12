@@ -1,5 +1,5 @@
 import './style.css';
-import { debugLog } from './debug-log.js';
+import { debugLog, debugError } from './debug-log.js';
 import { parseExif } from './exif.js';
 import { createCollection, loadAsset, loadAssets, loadCollections, loadPhotos, localRepositories, photoId, removeAsset, removePhoto, saveAsset, saveCollections, savePhoto } from './repositories/local.js';
 import { cloudAccountRepository } from './repositories/cloud.js';
@@ -16,6 +16,46 @@ const logoUrl = brandLogoUrl;
 
 const app = document.querySelector('#app');
 let photos = [];
+window.stillfolioInspectPhotos = async () => {
+  const entries = photos.map(item => ({file: item.file, url: item.url}));
+  const images = [...document.querySelectorAll('img')];
+  debugLog('缓存检测开始', {total: entries.length});
+  const timed = async task => {
+    let timer;
+    try { return await Promise.race([task, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('检测等待超过5秒')), 5000); })]); }
+    finally { clearTimeout(timer); }
+  };
+  for (let index = 0; index < entries.length; index++) {
+    const item = entries[index];
+    const result = {number: index + 1};
+    try {
+      const data = await timed(item.file.arrayBuffer());
+      result.originalBytes = data.byteLength;
+    } catch (error) { result.originalError = debugError(error); }
+    try {
+      const response = await fetch(item.url);
+      if (!response.ok) throw new Error(`显示地址读取 HTTP ${response.status}`);
+      const data = await timed(response.arrayBuffer());
+      result.displayBytes = data.byteLength;
+    } catch (error) { result.displayError = debugError(error); }
+    const image = images.find(image => image.src === item.url && image.complete && image.naturalWidth > 0);
+    if (image) {
+      try {
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(1, 4096 / Math.max(image.naturalWidth, image.naturalHeight));
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+        const blob = await timed(new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .92)));
+        if (!blob) throw new Error('无法编码画布像素');
+        result.decodedPixels = {originalWidth: image.naturalWidth, originalHeight: image.naturalHeight, width: canvas.width, height: canvas.height, bytes: blob.size};
+        canvas.width = canvas.height = 1;
+      } catch (error) { result.pixelError = debugError(error); }
+    } else { result.decodedPixels = '当前未驻留已解码图片'; }
+    debugLog('图片恢复来源检测', result);
+  }
+  debugLog('缓存检测完成', {total: entries.length, modifiedPhotos: 0});
+};
 let current = 0;
 let archiveLoadRevision = 0;
 let collectionCoverRevision = 0;

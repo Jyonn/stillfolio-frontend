@@ -36,7 +36,7 @@ function mount() {
       <header><strong>同步调试日志</strong><button type="button" data-debug-close aria-label="关闭日志">×</button></header>
       <p>记录请求和本地保存阶段，不包含密钥或照片内容。刷新后日志保留，最多 300 条。</p>
       <textarea readonly aria-label="可复制的调试日志" spellcheck="false"></textarea>
-      <footer><button type="button" data-debug-clear>清空日志</button><button type="button" data-debug-copy>复制全部</button></footer>
+      <footer><button type="button" data-debug-clear>清空日志</button><button type="button" data-debug-inspect>检测图片缓存</button><button type="button" data-debug-copy>复制全部</button></footer>
       <span class="debug-copy-status" role="status"></span>
     </section>`;
   document.body.append(root);
@@ -70,6 +70,17 @@ function mount() {
   });
   root.querySelector('[data-debug-close]').onclick = () => { panel.hidden = true; button.focus(); };
   root.querySelector('[data-debug-clear]').onclick = () => { lines = []; debugLog('日志已清空'); };
+  root.querySelector('[data-debug-inspect]').onclick = async event => {
+    const target = event.currentTarget;
+    target.disabled = true;
+    status.textContent = '正在只读检测当前作品集，请保持页面打开…';
+    try {
+      if (!window.stillfolioInspectPhotos) throw new Error('请在作品集编辑页运行检测');
+      await window.stillfolioInspectPhotos();
+      status.textContent = '检测完成，请复制全部日志';
+    } catch (error) { debugLog('缓存检测异常', debugError(error)); status.textContent = '检测异常，请复制日志'; }
+    finally { target.disabled = false; }
+  };
   root.querySelector('[data-debug-copy]').onclick = async () => {
     try { await navigator.clipboard.writeText(report()); status.textContent = '已复制，可直接粘贴发送'; }
     catch { output.focus(); output.select(); status.textContent = '请长按已选中的日志，选择复制'; }
