@@ -14,6 +14,7 @@ export const DEFAULT_DISPLAY_SETTINGS = {
   locationVisible: true,
   locationService: 'amap',
   locationDisplayMode: 'both',
+  longPhotoDefaultMode: 'window',
   slotOptions: Object.fromEntries(SLOT_KEYS.map(slot => [slot, {
     camera: { includeLens: true },
     exposure: { focalLength: true, aperture: true, shutter: true, iso: true },

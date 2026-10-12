@@ -1026,6 +1026,18 @@ button { color: inherit; }
 .location-config { display: grid; gap: .7rem; }
 .location-config > div { display: flex; flex-wrap: wrap; gap: .55rem 1.2rem; }
 .location-service-options { border-top: 1px solid var(--line); padding-top: .65rem; }
+.long-photo-mode-options { display: flex; align-items: center; gap: .4rem; }
+.long-photo-mode-options label { cursor: pointer; }
+.long-photo-mode-options input { position: absolute; opacity: 0; pointer-events: none; }
+.long-photo-mode-options span {
+  display: block;
+  border: 1px solid var(--line);
+  padding: .48rem .7rem;
+  color: #777168;
+  font-size: .6rem;
+}
+.long-photo-mode-options input:checked + span { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.long-photo-mode-options input:focus-visible + span { outline: 2px solid #7ba9dc; outline-offset: 2px; }
 .logo-config { display: block; }
 .logo-choice-strip { display: flex; gap: .5rem; overflow-x: auto; scrollbar-width: none; }
 .logo-choice-strip::-webkit-scrollbar { display: none; }

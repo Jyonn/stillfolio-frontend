@@ -252,7 +252,7 @@ app.innerHTML = `
             <span><strong>地理解析服务</strong><small>高德与 OpenCage 服务 Key</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
           <button class="user-settings-entry" type="button" data-user-panel="logo">
-            <span><strong>我的 LOGO</strong><small>添加并管理本地 LOGO</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+            <span><strong>我的 LOGO</strong><small class="logo-settings-description">添加并管理当前设备的 LOGO</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
         </div>
         <section class="user-subpanel account-setting" data-user-view="account" hidden>
@@ -392,7 +392,9 @@ async function renderCollectionCovers(orderedCollections) {
     const records = await loadPhotos();
     for (const collection of orderedCollections) {
       if (revision !== collectionCoverRevision) return;
-      const firstPhoto = records.find(record => record.collectionId === collection.id);
+      const firstPhoto = records
+        .filter(record => record.collectionId === collection.id && !record.cloudDeleted)
+        .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0))[0];
       if (!firstPhoto) continue;
       let preview;
       try {
@@ -602,6 +604,8 @@ function renderUserIdentity() {
   if (entry) entry.hidden = cloud;
   const logout = document.querySelector('.account-logout');
   if (logout) logout.hidden = !cloud;
+  const logoDescription = document.querySelector('.logo-settings-description');
+  if (logoDescription) logoDescription.textContent = cloud ? '添加并自动同步我的 LOGO' : '添加并管理当前设备的 LOGO';
   renderSyncStatus();
 }
 
@@ -2179,6 +2183,12 @@ function renderDisplaySettings() {
       <div class="setting-copy"><span>位置栏</span><strong>${displayDraft.locationVisible === false ? '隐藏' : '位置'}</strong></div>
       <div class="setting-actions">${displayDraft.locationVisible === false ? '' : `<button type="button" data-config="locationBar">设置</button>`}<button type="button" data-switch="locationBar">切换</button></div>
       ${displayDraft.locationVisible === false ? '' : displayConfigMarkup('locationBar', 'location')}${displayPickerMarkup('locationBar')}
+    </section>
+    <section class="display-setting-row long-photo-default-setting" data-row="longPhotoDefaultMode">
+      <div class="setting-copy"><span>导入长图</span><strong>默认展示方式</strong></div>
+      <div class="long-photo-mode-options" role="radiogroup" aria-label="导入长图默认展示方式">
+        ${[['window', '标准'], ['expanded', '扩展']].map(([mode, label]) => `<label><input type="radio" name="long-photo-default-mode" data-long-photo-mode="${mode}"${(displayDraft.longPhotoDefaultMode || 'window') === mode ? ' checked' : ''}><span>${label}</span></label>`).join('')}
+      </div>
     </section>`;
 }
 
@@ -2279,6 +2289,12 @@ el['display-settings-list'].addEventListener('click', event => {
   renderDisplaySettings();
 });
 el['display-settings-list'].addEventListener('change', async event => {
+  const longPhotoMode = event.target.dataset.longPhotoMode;
+  if (longPhotoMode && event.target.checked) {
+    displayDraft.longPhotoDefaultMode = longPhotoMode;
+    renderDisplaySettings();
+    return;
+  }
   const locationDisplay = event.target.dataset.locationDisplay;
   if (locationDisplay && event.target.checked) {
     displayDraft.locationDisplayMode = locationDisplay;
@@ -2446,7 +2462,8 @@ function show(index, { deferRender = false } = {}) {
 async function addFiles(fileList) {
   const files = [...fileList].filter(f => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
   if (!files.length) return;
-  const results = await Promise.allSettled(files.map(async file => {
+  const importStartedAt = Date.now();
+  const results = await Promise.allSettled(files.map(async (file, fileIndex) => {
     const exif = await parseExif(file);
     const preview = await createPreview(file);
     const url = URL.createObjectURL(preview);
@@ -2457,7 +2474,7 @@ async function addFiles(fileList) {
         img.onerror = () => reject(new Error(`无法解码 ${file.name}`));
         img.src = url;
       });
-      return { id: photoId(file, activeCollectionId), collectionId: activeCollectionId, file, url, ...size, exif, places: {}, placeEditedByService: {}, cropX: 50, cropY: 50, cropMode: 'window', createdAt: Date.now() };
+      return { id: photoId(file, activeCollectionId), collectionId: activeCollectionId, file, url, ...size, exif, places: {}, placeEditedByService: {}, cropX: 50, cropY: 50, cropMode: displaySettings.longPhotoDefaultMode === 'expanded' ? 'expanded' : 'window', createdAt: importStartedAt + fileIndex };
     } catch (error) {
       URL.revokeObjectURL(url);
       throw error;
@@ -2481,7 +2498,7 @@ async function addFiles(fileList) {
   for (const item of loaded.filter(item => existing.has(item.id))) URL.revokeObjectURL(item.url);
   photos.push(...fresh);
   await Promise.all(fresh.map(savePhoto));
-  if (fresh.length) renderSyncStatus();
+  if (fresh.length) renderCollections();
   if (fresh.length) show(photos.length - fresh.length);
   if (fresh.length && collection?.storageMode === 'cloud' && collection.autoSyncNewPhotos !== false && cloudUser) uploadNewPhotosToCloud(collection, fresh);
 }
@@ -2836,6 +2853,7 @@ async function deleteCurrentPhoto() {
   URL.revokeObjectURL(item.url);
   photos.splice(current, 1);
   await removePhoto(item.id);
+  renderCollections();
   if (!photos.length) showEmpty();
   else show(Math.min(current, photos.length - 1));
 }
