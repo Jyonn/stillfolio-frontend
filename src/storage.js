@@ -49,6 +49,8 @@ export async function savePhoto(item) {
     cropX: Number.isFinite(item.cropX) ? item.cropX : 50,
     cropMode: item.cropMode || 'window',
     cloudSyncStatus: item.cloudSyncStatus || '',
+    cloudUpdatedAt: Number(item.cloudUpdatedAt) || 0,
+    cloudDeleted: Boolean(item.cloudDeleted),
     createdAt: item.createdAt,
   };
   await transaction('readwrite', store => store.put(record));

@@ -3,6 +3,7 @@ import { parseExif } from './exif.js';
 import { createCollection, loadAsset, loadAssets, loadCollections, loadPhotos, localRepositories, photoId, removeAsset, removePhoto, saveAsset, saveCollections, savePhoto } from './repositories/local.js';
 import { cloudAccountRepository } from './repositories/cloud.js';
 import { cloudSyncRepository } from './repositories/sync.js';
+import { cloudMutationQueue } from './repositories/sync-queue.js';
 import { applyCropVariables, applyInlineCrop, clearCropVariables, cropLayout, needsCrop, normalizeCrop } from './crop-layout.js';
 import { createWindowedCarousel } from './carousel.js';
 import { cloneDisplaySettings, DEFAULT_DISPLAY_SETTINGS, PROPERTY_LABELS, SLOT_KEYS, slotData } from './display-settings.js';
@@ -315,7 +316,8 @@ let customAvatarUrl = '';
 let geoService = displaySettings.locationService;
 
 function activeCollection() {
-  return collections.find(item => item.id === activeCollectionId) || collections[0];
+  return collections.find(item => item.id === activeCollectionId && !item.cloudDeleted)
+    || collections.find(item => !item.cloudDeleted);
 }
 
 function saveActiveDisplaySettings() {
@@ -323,6 +325,7 @@ function saveActiveDisplaySettings() {
   if (!collection) return;
   collection.settings = cloneDisplaySettings(displaySettings);
   saveCollections(collections, activeCollectionId);
+  queueCloudMutation(`collection:${collection.id}`, 'collection-metadata', { collectionId: collection.id }, collection);
 }
 
 function closeCollectionMenu() {
@@ -333,7 +336,7 @@ function closeCollectionMenu() {
 
 function renderCollections() {
   const active = activeCollection();
-  const orderedCollections = [...collections].sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+  const orderedCollections = collections.filter(item => !item.cloudDeleted).sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
   el['collection-name'].textContent = active?.name || '未命名作品集';
   el['workspace-collection-name'].textContent = active?.name || '未命名作品集';
   const cards = orderedCollections.map(collectionCardMarkup).join('');
@@ -458,10 +461,92 @@ let codeCooldownTimer = null;
 const syncTasks = new Map();
 const remoteLogoAssets = new Map();
 let logoSyncPromise = null;
+let mutationFlushPromise = null;
 localStorage.removeItem('stillfolio-hidden-cloud-logos-v1');
+
+function collectionCloudOwner(collection = activeCollection()) {
+  return collection?.cloudOwnerId || cloudUser?.id || '';
+}
+
+function queueCloudMutation(key, type, payload, collection = activeCollection()) {
+  const ownerId = collectionCloudOwner(collection);
+  if (!ownerId || collection?.storageMode !== 'cloud') return;
+  cloudMutationQueue.put(ownerId, key, type, payload);
+  setSyncTask('mutations', { kind: 'mutation', phase: 'running', current: 0, total: cloudMutationQueue.list(ownerId).length });
+  flushCloudMutations();
+}
+
+function queuePhotoMetadata(item) {
+  const collection = collections.find(value => value.id === item?.collectionId);
+  if (!item || !collection) return;
+  item.cloudSyncStatus = 'syncing';
+  queueCloudMutation(`photo:${item.id}`, 'photo-metadata', {
+    collectionId: collection.id, photoId: item.id,
+  }, collection);
+  if (collection.id === activeCollectionId) renderPhotoSyncStatus(item);
+}
+
+async function flushCloudMutations() {
+  if (!cloudUser?.id || mutationFlushPromise) return mutationFlushPromise;
+  let stoppedOnError = false;
+  mutationFlushPromise = (async () => {
+    const ownerId = cloudUser.id;
+    for (const mutation of cloudMutationQueue.list(ownerId)) {
+      try {
+        const collection = mutation.payload.collectionId
+          ? collections.find(item => item.id === mutation.payload.collectionId)
+          : null;
+        if (mutation.type === 'collection-metadata') {
+          if (!collection?.cloudId) continue;
+          await cloudSyncRepository.updateCollection(collection);
+        } else if (mutation.type === 'photo-metadata') {
+          if (!collection?.cloudId) continue;
+          const record = (await loadPhotos()).find(item => item.id === mutation.payload.photoId);
+          if (!record) { cloudMutationQueue.remove(ownerId, mutation.key, mutation.updatedAt); continue; }
+          await cloudSyncRepository.updatePhotoMetadata(collection.cloudId, record);
+          record.cloudSyncStatus = 'success';
+          record.cloudUpdatedAt = Date.now();
+          await savePhoto(record);
+          const visible = photos.find(item => item.id === record.id);
+          if (visible) {
+            visible.cloudSyncStatus = 'success';
+            visible.cloudUpdatedAt = record.cloudUpdatedAt;
+            renderPhotoSyncStatus(visible);
+          }
+        } else if (mutation.type === 'candidates') {
+          if (!collection?.cloudId) continue;
+          await cloudSyncRepository.syncCandidates(collection.cloudId, mutation.payload.candidates);
+        } else if (mutation.type === 'delete-photo') {
+          await cloudSyncRepository.deleteSource('photo', mutation.payload.sourceId);
+        } else if (mutation.type === 'delete-logo') {
+          await cloudSyncRepository.deleteSource('logo', mutation.payload.sourceId);
+        } else if (mutation.type === 'delete-collection') {
+          await cloudSyncRepository.deleteCollection(mutation.payload.cloudId);
+        }
+        cloudMutationQueue.remove(ownerId, mutation.key, mutation.updatedAt);
+      } catch (error) {
+        if (mutation.type === 'photo-metadata') {
+          const visible = photos.find(item => item.id === mutation.payload.photoId);
+          if (visible) { visible.cloudSyncStatus = 'failed'; renderPhotoSyncStatus(visible); }
+        }
+        setSyncTask('mutations', { kind: 'collection', phase: 'error', error: error.message });
+        stoppedOnError = true;
+        break;
+      }
+    }
+    if (!cloudMutationQueue.list(ownerId).length) setSyncTask('mutations', { kind: 'collection', phase: 'success', total: 0 });
+  })().finally(() => {
+    mutationFlushPromise = null;
+    if (!stoppedOnError && cloudUser?.id && cloudMutationQueue.list(cloudUser.id).length) {
+      queueMicrotask(() => flushCloudMutations());
+    }
+  });
+  return mutationFlushPromise;
+}
 
 function renderUserIdentity() {
   const cloud = Boolean(cloudUser?.id);
+  if (cloud) localStorage.setItem('stillfolio-last-cloud-owner-id', String(cloudUser.id));
   const localProfile = localRepositories.profile.load();
   document.querySelectorAll('.profile-tier').forEach(node => { node.textContent = cloud ? '云端用户' : '本地用户'; });
   const nickname = cloudUser?.nickname || localProfile?.nickname;
@@ -484,6 +569,7 @@ function taskProgress(task) {
   if (!task) return '';
   if (task.phase === 'error') return task.error || '同步失败';
   if (task.phase === 'success') return task.total ? `已同步 ${task.total} 项` : '已是最新';
+  if (task.kind === 'mutation') return '正在同步本地修改';
   if (task.action === 'delete') return task.kind === 'logo' ? '正在永久删除 LOGO' : '正在永久删除图片';
   if (task.kind === 'logo') return `正在${task.direction === 'download' ? '下载' : '上传'}第 ${task.current}/${task.total} 个 LOGO`;
   return `正在${task.direction === 'download' ? '下载' : '上传'}第 ${task.current}/${task.total} 张图片`;
@@ -509,17 +595,19 @@ function renderSyncStatus() {
     return;
   }
   const logoTask = syncTasks.get('logos');
-  const collectionRows = collections.map(collection => {
+  const mutationTask = syncTasks.get('mutations');
+  const collectionRows = collections.filter(collection => !collection.cloudDeleted).map(collection => {
     const task = syncTasks.get(`collection:${collection.id}`);
     const runningTask = task?.phase === 'running';
     const status = task ? taskProgress(task) : collection.storageMode === 'cloud' ? '云端作品集' : '等待手动同步';
     return `<section class="sync-row${task?.phase === 'error' ? ' error' : ''}">
       <div><strong>${escapeHtml(collection.name)}</strong><small>${escapeHtml(status)}</small></div>
-      <button type="button" data-sync-collection="${escapeHtml(collection.id)}" ${runningTask ? 'disabled' : ''}>${runningTask ? '同步中' : collection.storageMode === 'cloud' ? '重新同步' : '同步'}</button>
+      <div class="sync-row-actions"><button type="button" data-sync-collection="${escapeHtml(collection.id)}" ${runningTask ? 'disabled' : ''}>${runningTask ? '同步中' : collection.storageMode === 'cloud' ? '重新同步' : '同步'}</button>${collection.storageMode === 'cloud' ? `<button type="button" data-delete-cloud-collection="${escapeHtml(collection.id)}">删除</button>` : ''}</div>
       ${runningTask ? `<i style="--sync-progress:${Math.round((task.current / Math.max(1, task.total)) * 100)}%"></i>` : ''}
     </section>`;
   }).join('');
   el['sync-status-body'].innerHTML = `
+    ${mutationTask?.phase === 'error' ? `<section class="sync-row error"><div><strong>待同步修改</strong><small>${escapeHtml(taskProgress(mutationTask))}</small></div><button type="button" data-sync-mutations>重试</button></section>` : ''}
     <section class="sync-row sync-logo-row${logoTask?.phase === 'error' ? ' error' : ''}">
       <div><strong>我的 LOGO</strong><small>${escapeHtml(logoTask ? taskProgress(logoTask) : '自动同步')}</small></div>
       ${logoTask?.phase === 'error' ? '<button type="button" data-sync-logos>重试</button>' : '<span>自动</span>'}
@@ -544,11 +632,14 @@ async function syncLogos() {
   logoSyncPromise = (async () => {
     try {
       const remote = await cloudSyncRepository.listLogos();
+      const pendingLogoDeletes = new Set(cloudMutationQueue.list(cloudUser.id)
+        .filter(item => item.type === 'delete-logo').map(item => item.payload.sourceId));
+      const visibleRemote = remote.filter(asset => !pendingLogoDeletes.has(asset.source_id));
       remoteLogoAssets.clear();
-      remote.forEach(asset => remoteLogoAssets.set(asset.source_id, asset));
+      visibleRemote.forEach(asset => remoteLogoAssets.set(asset.source_id, asset));
       const localIds = new Set(customLogos.map(logo => logo.id));
-      const uploads = customLogos.filter(logo => !remoteLogoAssets.has(logo.id));
-      const downloads = remote.filter(asset => !localIds.has(asset.source_id));
+      const uploads = customLogos.filter(logo => !pendingLogoDeletes.has(logo.id) && !remoteLogoAssets.has(logo.id));
+      const downloads = visibleRemote.filter(asset => !localIds.has(asset.source_id));
       const total = uploads.length + downloads.length;
       setSyncTask('logos', { kind: 'logo', phase: total ? 'running' : 'success', current: 0, total });
       let current = 0;
@@ -588,12 +679,16 @@ async function restoreCloudCollections() {
   let remoteCollections;
   try {
     remoteCollections = await cloudSyncRepository.listCollections();
+    const pendingCollectionDeletes = new Set(cloudMutationQueue.list(cloudUser.id)
+      .filter(item => item.type === 'delete-collection').map(item => item.payload.cloudId));
+    remoteCollections = remoteCollections.filter(item => !pendingCollectionDeletes.has(item.id));
   } catch (error) {
     setSyncTask('collections:restore', { kind: 'collection', direction: 'download', phase: 'error', error: error.message });
     return;
   }
   const localPhotos = await loadPhotos();
   const localPhotoIds = new Set(localPhotos.map(photo => photo.id));
+  const localPhotoMap = new Map(localPhotos.map(photo => [photo.id, photo]));
   let changed = false;
 
   for (const remote of remoteCollections) {
@@ -603,14 +698,60 @@ async function restoreCloudCollections() {
       collections.push(collection);
       changed = true;
     }
-    collection.name = remote.name;
-    collection.settings = cloneDisplaySettings(remote.display_settings || DEFAULT_DISPLAY_SETTINGS);
+    const hasPendingCollectionUpdate = cloudMutationQueue.has(cloudUser.id, `collection:${collection.id}`);
+    if (!hasPendingCollectionUpdate) {
+      collection.name = remote.name;
+      collection.settings = cloneDisplaySettings(remote.display_settings || DEFAULT_DISPLAY_SETTINGS);
+    }
     collection.cloudId = remote.id;
+    collection.cloudOwnerId = cloudUser.id;
     collection.storageMode = 'cloud';
+    collection.cloudDeleted = false;
     collection.createdAt = Number.isFinite(Date.parse(remote.created_at)) ? Date.parse(remote.created_at) : collection.createdAt;
 
+    if (!cloudMutationQueue.has(cloudUser.id, `candidates:${collection.id}`)) {
+      const candidates = { camera: [], location: [] };
+      for (const candidate of Array.isArray(remote.candidates) ? remote.candidates : []) {
+        if (candidate?.kind in candidates && candidate.payload) candidates[candidate.kind].push(candidate.payload);
+      }
+      localStorage.setItem(`metadata-candidates-v2:${collection.id}`, JSON.stringify(candidates));
+    }
+
     const assets = Array.isArray(remote.photos) ? remote.photos : [];
-    const missing = assets.filter(asset => !localPhotoIds.has(asset.source_id));
+    const remotePhotoIds = new Set(assets.map(asset => asset.source_id));
+    for (const record of localPhotos.filter(item => item.collectionId === collection.id && item.cloudSyncStatus === 'success')) {
+      const hasPendingChange = cloudMutationQueue.has(cloudUser.id, `photo:${record.id}`)
+        || cloudMutationQueue.has(cloudUser.id, `delete-photo:${record.id}`);
+      if (!remotePhotoIds.has(record.id) && !hasPendingChange && !record.cloudDeleted) {
+        record.cloudDeleted = true;
+        await savePhoto(record);
+      }
+    }
+    for (const asset of assets) {
+      const record = localPhotoMap.get(asset.source_id);
+      if (!record || cloudMutationQueue.has(cloudUser.id, `photo:${asset.source_id}`)) continue;
+      const remoteUpdatedAt = Date.parse(asset.updated_at) || 0;
+      if (record.cloudDeleted) {
+        record.cloudDeleted = false;
+        await savePhoto(record);
+      }
+      if (remoteUpdatedAt <= (record.cloudUpdatedAt || 0)) continue;
+      const metadata = asset.metadata || {};
+      Object.assign(record, {
+        width: Number(metadata.width) || record.width,
+        height: Number(metadata.height) || record.height,
+        exif: metadata.exif || {}, places: metadata.places || {}, place: metadata.place || '',
+        placeEdited: Boolean(metadata.placeEdited), placeEditedByService: metadata.placeEditedByService || {},
+        placeService: metadata.placeService || '', locationSource: metadata.locationSource || '',
+        cropX: Number.isFinite(metadata.cropX) ? metadata.cropX : 50,
+        cropY: Number.isFinite(metadata.cropY) ? metadata.cropY : 50,
+        cropMode: metadata.cropMode || 'window', cloudSyncStatus: 'success', cloudUpdatedAt: remoteUpdatedAt,
+        cloudDeleted: false,
+      });
+      await savePhoto(record);
+    }
+    const missing = assets.filter(asset => !localPhotoIds.has(asset.source_id)
+      && !cloudMutationQueue.has(cloudUser.id, `delete-photo:${asset.source_id}`));
     const key = `collection:${collection.id}`;
     if (missing.length) setSyncTask(key, { kind: 'collection', direction: 'download', phase: 'running', current: 0, total: missing.length });
     try {
@@ -632,11 +773,16 @@ async function restoreCloudCollections() {
           exif: metadata.exif || {},
           places: metadata.places || {},
           place: metadata.place || '',
+          placeEdited: Boolean(metadata.placeEdited),
           placeEditedByService: metadata.placeEditedByService || {},
+          placeService: metadata.placeService || '',
+          locationSource: metadata.locationSource || '',
           cropX: Number.isFinite(metadata.cropX) ? metadata.cropX : 50,
           cropY: Number.isFinite(metadata.cropY) ? metadata.cropY : 50,
           cropMode: metadata.cropMode || 'window',
           cloudSyncStatus: 'success',
+          cloudUpdatedAt: Date.parse(asset.updated_at) || Date.now(),
+          cloudDeleted: false,
           createdAt: Number(metadata.createdAt) || Date.now(),
         });
         localPhotoIds.add(asset.source_id);
@@ -645,6 +791,18 @@ async function restoreCloudCollections() {
     } catch (error) {
       setSyncTask(key, { kind: 'collection', direction: 'download', phase: 'error', error: error.message });
     }
+  }
+
+  const remoteClientIds = new Set(remoteCollections.map(item => item.client_id));
+  for (const collection of collections.filter(item => item.storageMode === 'cloud' && String(item.cloudOwnerId) === String(cloudUser.id))) {
+    const pending = cloudMutationQueue.has(cloudUser.id, `collection:${collection.id}`)
+      || cloudMutationQueue.has(cloudUser.id, `delete-collection:${collection.id}`);
+    if (!remoteClientIds.has(collection.id) && !pending) collection.cloudDeleted = true;
+  }
+  if (!collections.some(item => !item.cloudDeleted)) collections.push(createCollection('未命名作品集', DEFAULT_DISPLAY_SETTINGS));
+  if (!collections.some(item => item.id === activeCollectionId && !item.cloudDeleted)) {
+    activeCollectionId = collections.find(item => !item.cloudDeleted).id;
+    changed = true;
   }
 
   if (remoteCollections.length || changed) {
@@ -673,20 +831,27 @@ async function syncCollectionToCloud(collectionId) {
     setSyncTask(key, { kind: 'collection', phase: 'running', current: 0, total: records.length });
     const remote = await cloudSyncRepository.syncCollection(collection);
     collection.cloudId = remote.id;
+    collection.cloudOwnerId = cloudUser.id;
     collection.storageMode = 'cloud';
     saveCollections(collections, activeCollectionId);
+    const candidates = loadInfoCandidatesFor(collection.id);
+    await cloudSyncRepository.syncCandidates(remote.id, candidates);
     for (let index = 0; index < records.length; index += 1) {
       setSyncTask(key, { current: index + 1 });
       const record = records[index];
       activeRecord = record;
       await cloudSyncRepository.uploadPhoto(remote.id, record);
       record.cloudSyncStatus = 'success';
+      record.cloudUpdatedAt = Date.now();
       await savePhoto(record);
       const visible = photos.find(photo => photo.id === record.id);
       if (visible) visible.cloudSyncStatus = 'success';
       renderPhotoSyncStatus();
       activeRecord = null;
     }
+    cloudMutationQueue.remove(cloudUser.id, `collection:${collection.id}`);
+    cloudMutationQueue.remove(cloudUser.id, `candidates:${collection.id}`);
+    records.forEach(record => cloudMutationQueue.remove(cloudUser.id, `photo:${record.id}`));
     setSyncTask(key, { phase: 'success', current: records.length, total: records.length });
   } catch (error) {
     if (activeRecord) {
@@ -703,6 +868,33 @@ async function syncCollectionToCloud(collectionId) {
     renderPhotoSyncStatus();
     setSyncTask(key, { phase: 'error', error: error.message });
   }
+}
+
+async function uploadNewPhotosToCloud(collection, items) {
+  if (!cloudUser || !collection?.cloudId || !items.length) return;
+  const key = `collection:${collection.id}`;
+  setSyncTask(key, { kind: 'collection', direction: 'upload', phase: 'running', current: 0, total: items.length });
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    try {
+      item.cloudSyncStatus = 'syncing';
+      await savePhoto(item);
+      renderPhotoSyncStatus(item);
+      setSyncTask(key, { current: index + 1 });
+      const asset = await cloudSyncRepository.uploadPhoto(collection.cloudId, item);
+      item.cloudSyncStatus = 'success';
+      item.cloudUpdatedAt = Date.parse(asset.updated_at) || Date.now();
+      await savePhoto(item);
+      renderPhotoSyncStatus(item);
+    } catch (error) {
+      item.cloudSyncStatus = 'failed';
+      await savePhoto(item);
+      renderPhotoSyncStatus(item);
+      setSyncTask(key, { phase: 'error', error: error.message });
+      return;
+    }
+  }
+  setSyncTask(key, { phase: 'success', current: items.length, total: items.length });
 }
 
 function closeSyncPanel() {
@@ -724,8 +916,41 @@ el['canvas-sync-close'].addEventListener('click', closeSyncPanel);
 el['sync-status-body'].addEventListener('click', event => {
   const collectionButton = event.target.closest('[data-sync-collection]');
   if (collectionButton) requestCollectionSync(collectionButton.dataset.syncCollection);
+  const deleteButton = event.target.closest('[data-delete-cloud-collection]');
+  if (deleteButton) {
+    if (deleteButton.dataset.confirm !== 'true') {
+      deleteButton.dataset.confirm = 'true';
+      deleteButton.textContent = '确认删除';
+      window.setTimeout(() => { if (deleteButton.isConnected) { deleteButton.dataset.confirm = ''; deleteButton.textContent = '删除'; } }, 5000);
+    } else {
+      deleteCloudCollection(deleteButton.dataset.deleteCloudCollection);
+    }
+  }
+  if (event.target.closest('[data-sync-mutations]')) flushCloudMutations();
   if (event.target.closest('[data-sync-logos]')) syncLogos();
 });
+
+async function deleteCloudCollection(collectionId) {
+  const collection = collections.find(item => item.id === collectionId);
+  const ownerId = collectionCloudOwner(collection);
+  if (!collection?.cloudId || !ownerId) return;
+  cloudMutationQueue.put(ownerId, `delete-collection:${collection.id}`, 'delete-collection', { cloudId: collection.cloudId });
+  setSyncTask('mutations', { kind: 'mutation', phase: 'running', total: cloudMutationQueue.list(ownerId).length });
+  const records = (await loadPhotos()).filter(item => item.collectionId === collection.id);
+  await Promise.all(records.map(item => removePhoto(item.id)));
+  localStorage.removeItem(`metadata-candidates-v2:${collection.id}`);
+  if (collection.id === activeCollectionId) photos.forEach(item => URL.revokeObjectURL(item.url));
+  collections = collections.filter(item => item.id !== collection.id);
+  if (!collections.length) collections.push(createCollection('未命名作品集', DEFAULT_DISPLAY_SETTINGS));
+  if (activeCollectionId === collection.id) activeCollectionId = collections[0].id;
+  saveCollections(collections, activeCollectionId);
+  displaySettings = cloneDisplaySettings(activeCollection().settings);
+  geoService = displaySettings.locationService;
+  renderCollections();
+  closeSyncPanel();
+  await restoreArchive();
+  flushCloudMutations();
+}
 
 function closeSyncConfirmation() {
   el['sync-confirm-modal'].classList.remove('open');
@@ -755,7 +980,11 @@ function requestCollectionSync(collectionId) {
 
 el['collection-sync'].addEventListener('click', () => requestCollectionSync(activeCollectionId));
 el['photo-sync'].addEventListener('click', () => {
-  if (el['photo-sync'].dataset.status === 'failed') syncCollectionToCloud(activeCollectionId);
+  if (el['photo-sync'].dataset.status !== 'failed') return;
+  const item = photos[current];
+  const collection = activeCollection();
+  if (cloudUser && item && cloudMutationQueue.has(cloudUser.id, `photo:${item.id}`)) flushCloudMutations();
+  else if (item) uploadNewPhotosToCloud(collection, [item]);
 });
 el['sync-confirm-cancel'].addEventListener('click', closeSyncConfirmation);
 document.querySelector('.sync-confirm-backdrop').addEventListener('click', closeSyncConfirmation);
@@ -975,8 +1204,10 @@ document.querySelector('.account-auth-form').addEventListener('submit', async ev
     });
     renderUserIdentity();
     showUserPanel();
+    await flushCloudMutations();
     syncLogos();
     await restoreCloudCollections();
+    await flushCloudMutations();
     await restoreArchive();
   } catch (error) {
     showAccountMessage(error.message, true);
@@ -1037,16 +1268,12 @@ el['logo-library'].addEventListener('click', async event => {
   if (!remove) return;
   const id = remove.dataset.removeLogo;
   const logo = customLogos.find(item => item.id === id);
-  if (cloudUser) {
-    setSyncTask('logos', { kind: 'logo', action: 'delete', phase: 'running', current: 0, total: 1 });
-    try {
-      await cloudSyncRepository.deleteSource('logo', id);
-      remoteLogoAssets.delete(id);
-      setSyncTask('logos', { kind: 'logo', action: '', phase: 'success', current: 1, total: 1 });
-    } catch (error) {
-      setSyncTask('logos', { kind: 'logo', action: '', phase: 'error', error: error.message });
-      return;
-    }
+  const ownerId = cloudUser?.id || localStorage.getItem('stillfolio-last-cloud-owner-id');
+  if (ownerId) {
+    cloudMutationQueue.put(ownerId, `delete-logo:${id}`, 'delete-logo', { sourceId: id });
+    setSyncTask('mutations', { kind: 'mutation', phase: 'running', total: cloudMutationQueue.list(ownerId).length });
+    remoteLogoAssets.delete(id);
+    flushCloudMutations();
   }
   if (logo) URL.revokeObjectURL(logo.url);
   customLogos = customLogos.filter(item => item.id !== id);
@@ -1077,16 +1304,24 @@ const INFO_FIELD_ROWS = {
   location: [{ keys: ['place'] }, { keys: ['latitude', 'longitude'], fixed: true }],
 };
 
-function loadInfoCandidates() {
+function loadInfoCandidatesFor(collectionId) {
   try {
-    return { camera: [], location: [], ...JSON.parse(localStorage.getItem(`metadata-candidates-v2:${activeCollectionId}`) || '{}') };
+    return { camera: [], location: [], ...JSON.parse(localStorage.getItem(`metadata-candidates-v2:${collectionId}`) || '{}') };
   } catch {
     return { camera: [], location: [] };
   }
 }
 
+function loadInfoCandidates() {
+  return loadInfoCandidatesFor(activeCollectionId);
+}
+
 function saveInfoCandidates(candidates) {
   localStorage.setItem(`metadata-candidates-v2:${activeCollectionId}`, JSON.stringify(candidates));
+  const collection = activeCollection();
+  queueCloudMutation(`candidates:${activeCollectionId}`, 'candidates', {
+    collectionId: activeCollectionId, candidates,
+  }, collection);
 }
 
 function setCanvasLocked(locked) {
@@ -1229,6 +1464,7 @@ async function applyInfoValues(type, values) {
     Object.assign(item.exif, values);
   }
   await savePhoto(item);
+  queuePhotoMetadata(item);
   show(current);
 }
 
@@ -1558,6 +1794,7 @@ async function finishCrop(event) {
   if (cropDragMoved) suppressInfoClickUntil = Date.now() + 300;
   el.photo.classList.remove('dragging');
   await savePhoto(item);
+  queuePhotoMetadata(item);
 }
 window.addEventListener('pointerup', finishCrop);
 window.addEventListener('pointercancel', finishCrop);
@@ -1598,6 +1835,7 @@ async function updatePlace() {
     item.places[service] = resolved;
     item.place = resolved;
     await savePhoto(item);
+    queuePhotoMetadata(item);
     if (photos[current] === item && geoService === service) {
       applyLocationVisibility(activeSlide, item);
       el.meta.innerHTML = metaRows(item);
@@ -1989,7 +2227,7 @@ async function addFiles(fileList) {
   photos.push(...fresh);
   await Promise.all(fresh.map(savePhoto));
   if (fresh.length) show(photos.length - fresh.length);
-  if (fresh.length && activeCollection()?.storageMode === 'cloud' && cloudUser) syncCollectionToCloud(activeCollectionId);
+  if (fresh.length && activeCollection()?.storageMode === 'cloud' && cloudUser) uploadNewPhotosToCloud(activeCollection(), fresh);
 }
 
 function isHeic(file) {
@@ -2080,6 +2318,7 @@ el['crop-mode-control'].addEventListener('click', async () => {
       applyMode();
     }
     await savePhoto(item);
+    queuePhotoMetadata(item);
   } finally {
     cropModeAnimating = false;
   }
@@ -2190,8 +2429,10 @@ el['collection-form'].addEventListener('submit', async event => {
   const name = el['collection-input'].value.trim();
   if (!name) return el['collection-input'].focus();
   if (el['collection-form'].dataset.mode === 'rename') {
-    activeCollection().name = name;
+    const collection = activeCollection();
+    collection.name = name;
     saveCollections(collections, activeCollectionId);
+    queueCloudMutation(`collection:${collection.id}`, 'collection-metadata', { collectionId: collection.id }, collection);
     renderCollections();
     closeCollectionForm();
     return;
@@ -2262,16 +2503,13 @@ function closeDeleteModal() {
 async function deleteCurrentPhoto() {
   const item = photos[current];
   if (!item) return;
-  if (cloudUser) {
-    const key = `collection:${item.collectionId}`;
-    setSyncTask(key, { kind: 'collection', action: 'delete', phase: 'running', current: 0, total: 1 });
-    try {
-      await cloudSyncRepository.deleteSource('photo', item.id);
-      setSyncTask(key, { kind: 'collection', action: '', phase: 'success', current: 1, total: 1 });
-    } catch (error) {
-      setSyncTask(key, { kind: 'collection', action: '', phase: 'error', error: error.message });
-      return;
-    }
+  const collection = collections.find(value => value.id === item.collectionId);
+  const ownerId = collectionCloudOwner(collection);
+  if (ownerId && collection?.storageMode === 'cloud') {
+    cloudMutationQueue.remove(ownerId, `photo:${item.id}`);
+    cloudMutationQueue.put(ownerId, `delete-photo:${item.id}`, 'delete-photo', { sourceId: item.id });
+    setSyncTask('mutations', { kind: 'mutation', phase: 'running', total: cloudMutationQueue.list(ownerId).length });
+    flushCloudMutations();
   }
   URL.revokeObjectURL(item.url);
   photos.splice(current, 1);
@@ -2617,7 +2855,7 @@ async function restoreArchive() {
   try {
     const records = await loadPhotos();
     if (revision !== archiveLoadRevision || collectionId !== activeCollectionId) return;
-    const activeRecords = records.filter(record => record.collectionId === collectionId);
+    const activeRecords = records.filter(record => record.collectionId === collectionId && !record.cloudDeleted);
     const restored = [];
     for (const record of activeRecords) {
       let preview;
@@ -2667,7 +2905,10 @@ const assetRestorePromise = restoreCustomAssets();
 Promise.all([assetRestorePromise, cloudRestorePromise]).then(async ([, user]) => {
   renderSyncStatus();
   if (user) {
+    await flushCloudMutations();
     await Promise.all([syncLogos(), restoreCloudCollections()]);
+    await flushCloudMutations();
   }
   await restoreArchive();
 });
+window.addEventListener('online', () => flushCloudMutations());

@@ -498,8 +498,10 @@ button { color: inherit; }
 .sync-row strong { overflow: hidden; font-family: "Noto Serif SC", serif; font-size: .66rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .sync-row small { margin-top: .28rem; color: #918b82; font-size: .52rem; line-height: 1.45; }
 .sync-row.error small { color: #8b5a51; }
-.sync-row > button { border: 0; padding: .35rem 0 .35rem .5rem; background: transparent; color: #625e57; cursor: pointer; font-size: .54rem; }
-.sync-row > button:disabled { cursor: wait; opacity: .5; }
+.sync-row > button, .sync-row-actions button { border: 0; padding: .35rem 0 .35rem .5rem; background: transparent; color: #625e57; cursor: pointer; font-size: .54rem; }
+.sync-row > button:disabled, .sync-row-actions button:disabled { cursor: wait; opacity: .5; }
+.sync-row-actions { display: flex; align-items: center; gap: .25rem; }
+.sync-row-actions button[data-confirm="true"] { color: #8b4f45; }
 .sync-row > span { color: #aaa49a; font-size: .5rem; letter-spacing: .08em; }
 .sync-row > i { position: absolute; right: 0; bottom: 0; left: 0; height: 1px; background: linear-gradient(to right, var(--ink) var(--sync-progress), var(--line) var(--sync-progress)); }
 .artboard-wrap:not(.canvas-locked) .display-slot[data-content="camera"],

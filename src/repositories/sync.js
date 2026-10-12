@@ -30,6 +30,23 @@ class CloudSyncRepository {
     });
   }
 
+  updateCollection(collection) {
+    return cloudAccountRepository.request(`/sync/collections/${collection.cloudId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: collection.name, display_settings: collection.settings }),
+    });
+  }
+
+  deleteCollection(collectionId) {
+    return cloudAccountRepository.request(`/sync/collections/${collectionId}`, { method: 'DELETE' });
+  }
+
+  syncCandidates(collectionId, candidates) {
+    return cloudAccountRepository.request(`/sync/collections/${collectionId}/candidates`, {
+      method: 'PUT', body: JSON.stringify({ candidates }),
+    });
+  }
+
   shareCollection(collectionId) {
     return cloudAccountRepository.request(`/sync/collections/${collectionId}/share`, { method: 'POST' });
   }
@@ -37,14 +54,27 @@ class CloudSyncRepository {
   uploadPhoto(collectionId, photo) {
     const body = new FormData();
     body.append('source_id', photo.id);
-    body.append('metadata', JSON.stringify({
-      width: photo.width, height: photo.height, exif: photo.exif, places: photo.places,
-      place: photo.place, cropX: photo.cropX, cropY: photo.cropY, cropMode: photo.cropMode,
-      fileName: photo.file?.name || '', lastModified: photo.file?.lastModified || 0,
-      createdAt: photo.createdAt || Date.now(),
-    }));
+    body.append('metadata', JSON.stringify(this.photoMetadata(photo)));
     body.append('file', photo.file, photo.file?.name || 'photograph.bin');
     return cloudAccountRepository.request(`/sync/collections/${collectionId}/photos`, { method: 'POST', body });
+  }
+
+  updatePhotoMetadata(collectionId, photo) {
+    return cloudAccountRepository.request(`/sync/collections/${collectionId}/photos`, {
+      method: 'PATCH',
+      body: JSON.stringify({ source_id: photo.id, metadata: this.photoMetadata(photo) }),
+    });
+  }
+
+  photoMetadata(photo) {
+    return {
+      width: photo.width, height: photo.height, exif: photo.exif, places: photo.places,
+      place: photo.place, placeEdited: Boolean(photo.placeEdited),
+      placeEditedByService: photo.placeEditedByService || {}, placeService: photo.placeService || '',
+      locationSource: photo.locationSource || '', cropX: photo.cropX, cropY: photo.cropY,
+      cropMode: photo.cropMode, fileName: photo.file?.name || '',
+      lastModified: photo.file?.lastModified || 0, createdAt: photo.createdAt || Date.now(),
+    };
   }
 }
 
