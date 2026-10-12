@@ -462,6 +462,7 @@ const syncTasks = new Map();
 const remoteLogoAssets = new Map();
 let logoSyncPromise = null;
 let mutationFlushPromise = null;
+let mutationFlushScheduled = false;
 localStorage.removeItem('stillfolio-hidden-cloud-logos-v1');
 
 function collectionCloudOwner(collection = activeCollection()) {
@@ -473,7 +474,16 @@ function queueCloudMutation(key, type, payload, collection = activeCollection())
   if (!ownerId || collection?.storageMode !== 'cloud') return;
   cloudMutationQueue.put(ownerId, key, type, payload);
   setSyncTask('mutations', { kind: 'mutation', phase: 'running', current: 0, total: cloudMutationQueue.list(ownerId).length });
-  flushCloudMutations();
+  scheduleCloudMutationFlush();
+}
+
+function scheduleCloudMutationFlush() {
+  if (mutationFlushScheduled) return;
+  mutationFlushScheduled = true;
+  queueMicrotask(() => {
+    mutationFlushScheduled = false;
+    flushCloudMutations();
+  });
 }
 
 function queuePhotoMetadata(item) {
@@ -1438,6 +1448,21 @@ function readInfoForm(type) {
   }));
 }
 
+function infoFormChanged(type, item, values) {
+  if (!item || pendingLocationSource) return true;
+  const previous = infoValues(type, item);
+  return INFO_FIELDS[type].some(([key, , inputType]) => {
+    if (inputType === 'number') {
+      const before = previous[key];
+      const after = values[key];
+      if (before === '' || before == null) return !(after === '' || after == null);
+      if (after === '' || after == null) return true;
+      return Number(before) !== Number(after);
+    }
+    return String(previous[key] ?? '') !== String(values[key] ?? '');
+  });
+}
+
 async function applyInfoValues(type, values) {
   const item = photos[current];
   if (!item) return;
@@ -1535,7 +1560,9 @@ el['info-form'].addEventListener('drop', event => {
 });
 el['info-form'].addEventListener('submit', async event => {
   event.preventDefault();
-  await applyInfoValues(editingInfoType, readInfoForm(editingInfoType));
+  const item = photos[current];
+  const values = readInfoForm(editingInfoType);
+  if (infoFormChanged(editingInfoType, item, values)) await applyInfoValues(editingInfoType, values);
   closeInfoModal();
 });
 
@@ -1793,6 +1820,7 @@ async function finishCrop(event) {
   cropDrag = null;
   if (cropDragMoved) suppressInfoClickUntil = Date.now() + 300;
   el.photo.classList.remove('dragging');
+  if (!cropDragMoved) return;
   await savePhoto(item);
   queuePhotoMetadata(item);
 }
@@ -1810,6 +1838,8 @@ document.fonts?.ready.then(() => {
 });
 el.photo.addEventListener('dragstart', event => event.preventDefault());
 
+const placeResolutionTasks = new Map();
+
 async function updatePlace() {
   const item = photos[current];
   if (!item) return;
@@ -1821,36 +1851,48 @@ async function updatePlace() {
   applyLocationVisibility(activeSlide, item);
   if (!hasCoordinatePair(item)) return;
   if (!locationModeShowsPlace()) return;
+  if (item.placeEditedByService[service]) return;
   const key = service === 'amap' ? el['amap-key'].value.trim() : el['opencage-key'].value.trim();
   if (!key || item.place) return;
-  try {
-    const url = service === 'amap'
-      ? `https://restapi.amap.com/v3/geocode/regeo?key=${encodeURIComponent(key)}&location=${lng},${lat}&extensions=base`
-      : `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(`${lat},${lng}`)}&key=${encodeURIComponent(key)}&language=en&no_annotations=1&no_record=1`;
-    const data = await fetch(url).then(r => r.json());
-    const resolved = service === 'amap'
-      ? (data.status === '1' && (data.regeocode.formatted_address || [data.regeocode.addressComponent.city, data.regeocode.addressComponent.district].flat().filter(Boolean).join(' · ')))
-      : data.results?.[0]?.formatted;
-    if (!resolved || item.placeEditedByService[service]) return;
-    item.places[service] = resolved;
-    item.place = resolved;
-    await savePhoto(item);
-    queuePhotoMetadata(item);
-    if (photos[current] === item && geoService === service) {
+  const taskKey = `${item.id}:${service}`;
+  if (placeResolutionTasks.has(taskKey)) return placeResolutionTasks.get(taskKey);
+  const task = (async () => {
+    try {
+      const url = service === 'amap'
+        ? `https://restapi.amap.com/v3/geocode/regeo?key=${encodeURIComponent(key)}&location=${lng},${lat}&extensions=base`
+        : `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(`${lat},${lng}`)}&key=${encodeURIComponent(key)}&language=en&no_annotations=1&no_record=1`;
+      const data = await fetch(url).then(r => r.json());
+      const resolved = service === 'amap'
+        ? (data.status === '1' && (data.regeocode.formatted_address || [data.regeocode.addressComponent.city, data.regeocode.addressComponent.district].flat().filter(Boolean).join(' · ')))
+        : data.results?.[0]?.formatted;
+      if (!resolved || item.placeEditedByService[service]) return;
+      item.places[service] = resolved;
+      item.place = resolved;
+      await savePhoto(item);
+      queuePhotoMetadata(item);
+      if (photos[current] === item && geoService === service) {
+        applyLocationVisibility(activeSlide, item);
+        el.meta.innerHTML = metaRows(item);
+      }
+    } catch {
       applyLocationVisibility(activeSlide, item);
-      el.meta.innerHTML = metaRows(item);
+    } finally {
+      placeResolutionTasks.delete(taskKey);
     }
-  } catch { applyLocationVisibility(activeSlide, item); }
+  })();
+  placeResolutionTasks.set(taskKey, task);
+  return task;
 }
 
-function applyService(service) {
+function applyService(service, { persist = true, resolvePlace = true } = {}) {
+  const changed = displaySettings.locationService !== service;
   geoService = service;
   displaySettings.locationService = service;
-  saveActiveDisplaySettings();
+  if (persist && changed) saveActiveDisplaySettings();
   document.querySelectorAll('.service-option').forEach(button => button.classList.toggle('active', button.dataset.service === service));
   el['service-key-amap'].hidden = service !== 'amap';
   el['service-key-opencage'].hidden = service !== 'opencage';
-  if (photos.length) updatePlace();
+  if (resolvePlace && photos.length) updatePlace();
 }
 
 const SLOT_LABELS = { topLeft: '左上', topRight: '右上', bottomLeft: '左下', bottomRight: '右下', locationBar: '位置栏' };
@@ -2047,9 +2089,11 @@ el['display-settings-list'].addEventListener('change', async event => {
   previewDisplayDraft();
 });
 el['display-apply'].addEventListener('click', () => {
-  displaySettings = cloneDisplaySettings(displayDraft);
-  saveActiveDisplaySettings();
-  applyService(displaySettings.locationService);
+  const nextSettings = cloneDisplaySettings(displayDraft);
+  const changed = JSON.stringify(nextSettings) !== JSON.stringify(displaySettings);
+  displaySettings = nextSettings;
+  if (changed) saveActiveDisplaySettings();
+  applyService(displaySettings.locationService, { persist: false });
   if (photos.length) show(current);
   closeDisplayModal({ restore: false });
 });
@@ -2430,10 +2474,12 @@ el['collection-form'].addEventListener('submit', async event => {
   if (!name) return el['collection-input'].focus();
   if (el['collection-form'].dataset.mode === 'rename') {
     const collection = activeCollection();
-    collection.name = name;
-    saveCollections(collections, activeCollectionId);
-    queueCloudMutation(`collection:${collection.id}`, 'collection-metadata', { collectionId: collection.id }, collection);
-    renderCollections();
+    if (collection.name !== name) {
+      collection.name = name;
+      saveCollections(collections, activeCollectionId);
+      queueCloudMutation(`collection:${collection.id}`, 'collection-metadata', { collectionId: collection.id }, collection);
+      renderCollections();
+    }
     closeCollectionForm();
     return;
   }
@@ -2850,7 +2896,7 @@ async function exportAllPhotos() {
 async function restoreArchive() {
   const revision = ++archiveLoadRevision;
   const collectionId = activeCollectionId;
-  applyService(geoService);
+  applyService(geoService, { persist: false, resolvePlace: false });
   showEmpty();
   try {
     const records = await loadPhotos();
