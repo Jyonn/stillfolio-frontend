@@ -2487,11 +2487,20 @@ document.addEventListener('keydown', event => {
   if (el['display-modal'].classList.contains('open') || el['user-modal'].classList.contains('open') || el['info-modal'].classList.contains('open')) return;
   if (!photos.length || !['ArrowRight', 'ArrowLeft'].includes(event.key)) return;
   const target = event.target;
+  const canvasControl = target instanceof Element && target.closest([
+    '.delete-current',
+    '.canvas-lock',
+    '.crop-mode-control',
+    '.canvas-info',
+    '.photo-sync',
+  ].join(','));
   const isEditing = target instanceof HTMLElement && (
     target.isContentEditable ||
-    target.matches('input, textarea, select, button')
+    target.matches('input, textarea, select') ||
+    (target.matches('button') && !canvasControl)
   );
   if (isEditing) return;
+  event.preventDefault();
   carousel.go(current + (event.key === 'ArrowRight' ? 1 : -1));
 });
 for (const event of ['dragenter','dragover']) document.addEventListener(event, e => { e.preventDefault(); document.body.classList.add('drop-active'); });
