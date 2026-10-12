@@ -1471,7 +1471,8 @@ button { color: inherit; }
 .onboarding-cloud-entry { background: transparent; color: var(--ink); }
 .onboarding-cloud-back { border: 0; padding: 0; background: transparent; color: #777168; font: inherit; font-size: .58rem; cursor: pointer; }
 .onboarding-code-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .8rem; }
-.onboarding-step label > .onboarding-code-row { margin-bottom: 0; }
+.onboarding-step label > .onboarding-code-row { display: grid; margin-bottom: 0; }
+.onboarding-code-row input { min-width: 0; }
 .onboarding-code-row button { min-width: 6.4rem; border: 1px solid var(--line); padding: .7rem .8rem; background: transparent; color: var(--ink); font-family: inherit; font-size: .57rem; cursor: pointer; }
 .onboarding-code-row button:disabled { cursor: wait; opacity: .55; }
 .onboarding-cloud-note { margin: 1rem 0 0; color: #6c7867; font-size: .58rem; }
