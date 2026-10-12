@@ -138,6 +138,32 @@ export async function renderSharedCollection(token) {
       page.innerHTML = createReadonlyCanvas({...photo, content_url: EMPTY_IMAGE}, index, photos.length, collection.display_settings, {logoUrl: customLogoUrl});
       return page;
     });
+    function layoutPage(index) {
+      const page = pages[index];
+      const photoStage = page.querySelector('.photo-stage');
+      if (photoStage.clientWidth && photoStage.clientHeight) {
+        layoutReadonlyCanvas(page, photos[index]);
+        return;
+      }
+      // PageFlip hides inactive sheets. Measure a plain canvas, never its zero-size sheet.
+      const measurement = document.createElement('div');
+      measurement.className = 'album-measure-host';
+      measurement.setAttribute('aria-hidden', 'true');
+      measurement.style.width = host.style.width;
+      const clone = page.querySelector('.artboard').cloneNode(true);
+      measurement.appendChild(clone);
+      document.body.appendChild(measurement);
+      try {
+        layoutReadonlyCanvas(measurement, photos[index]);
+        for (const selector of ['.artboard', '.photo-stage', '.preview-photo']) {
+          const source = selector === '.artboard' ? clone : clone.querySelector(selector);
+          const target = page.querySelector(selector);
+          target.className = source.className;
+          const style = source.getAttribute('style');
+          if (style == null) target.removeAttribute('style'); else target.setAttribute('style', style);
+        }
+      } finally { measurement.remove(); }
+    }
     function pruneImages() {
       if (flipping || exporting) return;
       const keep = new Set([current - 1, current, current + 1]);
@@ -189,7 +215,7 @@ export async function renderSharedCollection(token) {
           const url = await cachedSharedImage(photo, 'full');
           applyingFull = true;
           await loadImageElement(image, url);
-          layoutReadonlyCanvas(page, photo);
+          layoutPage(index);
           loaded.add(index);
           photoStage.classList.remove('shared-image-thumbnail', 'shared-image-loading', 'shared-image-error');
         } catch (error) {
@@ -217,6 +243,7 @@ export async function renderSharedCollection(token) {
       const revision = ++preloadRevision;
       try { await hydrate(index); } catch { status.textContent = '照片加载失败，请重试或切换下一张'; }
       if (index !== current) return;
+      layoutPage(index);
       // Adjacent pages are ready before a turn; the rest are cached sequentially.
       [index - 1, index + 1].filter(i => i >= 0 && i < photos.length).forEach(i => hydrate(i).catch(() => {}));
       preloadFollowing(index, revision);
@@ -232,9 +259,9 @@ export async function renderSharedCollection(token) {
       const width = Math.max(1, Math.min(available.width - 32, available.height * .75 - 12, 600));
       host.style.width = `${width}px`;
       host.style.height = `${width * 4 / 3}px`;
-      pages.forEach((page, index) => layoutReadonlyCanvas(page, photos[index]));
       book = new PageFlip(host, {width, height: width * 4 / 3, size: 'fixed', startPage: current, autoSize: false, usePortrait: true, flippingTime: 850, maxShadowOpacity: .25, mobileScrollSupport: true, useMouseEvents: !exporting && !reducedMotion.matches, showPageCorners: false});
       book.loadFromHTML(pages);
+      pages.forEach((_, index) => layoutPage(index));
       book.on('changeState', event => {
         flipping = event.data !== 'read';
         updateControls();

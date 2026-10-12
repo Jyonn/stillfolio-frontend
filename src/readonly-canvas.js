@@ -54,8 +54,9 @@ export function layoutReadonlyCanvas(root, photo) {
   const image = root.querySelector('.preview-photo');
   if (!stage || !artboard || !image) return;
 
-  const imageWidth = image.naturalWidth || photo.width;
-  const imageHeight = image.naturalHeight || photo.height;
+  // Metadata stays stable while thumbnails/placeholders or hidden-page clones load.
+  const imageWidth = photo.width || image.naturalWidth;
+  const imageHeight = photo.height || image.naturalHeight;
   stage.classList.remove('expanded');
   artboard.classList.remove('expanded-photo', 'feathered');
   image.classList.remove('cropped');
