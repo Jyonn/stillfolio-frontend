@@ -116,9 +116,9 @@ app.innerHTML = `
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2m4 0h10M14 4v6M10 14v6"/></svg>
         </button>
         <button class="collection-sync icon-button secondary-icon" type="button" aria-label="同步当前作品集" title="同步当前作品集">
-          <svg class="collection-sync-cloud" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 18h10.1a4.2 4.2 0 0 0 .7-8.3A6.1 6.1 0 0 0 6.5 8.2 4.9 4.9 0 0 0 7.2 18Z"/><path d="m9 13 3-3 3 3M12 10v6"/></svg>
-          <svg class="collection-sync-spinner" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M17 3.8h3.2V7"/></svg>
-          <svg class="collection-sync-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m7.5 12.5 3 3 6-7"/></svg>
+          <svg class="collection-sync-cloud" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 18h10.1a4.2 4.2 0 0 0 .7-8.3A6.1 6.1 0 0 0 6.5 8.2 4.9 4.9 0 0 0 7.2 18Z"/><path class="collection-sync-upload" d="m9 13 3-3 3 3M12 10v6"/></svg>
+          <svg class="collection-sync-state collection-sync-spinner" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M17 3.8h3.2V7"/></svg>
+          <svg class="collection-sync-state collection-sync-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m7.5 12.5 3 3 6-7"/></svg>
         </button>
         <button class="collection-share icon-button secondary-icon" type="button" aria-label="分享当前作品集" title="分享当前作品集" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="2.2"/><circle cx="17" cy="6" r="2.2"/><circle cx="17" cy="18" r="2.2"/><path d="m9 11 6-3.7M9 13l6 3.7"/></svg>
@@ -482,6 +482,7 @@ let codeCooldownTimer = null;
 const syncTasks = new Map();
 const syncPhotoSnapshots = new Map();
 let syncDetailCollectionId = activeCollectionId;
+let syncPanelMode = 'global';
 const remoteLogoAssets = new Map();
 let logoSyncPromise = null;
 let mutationFlushPromise = null;
@@ -637,15 +638,19 @@ function renderSyncStatus() {
   const detailCollection = collections.find(item => item.id === syncDetailCollectionId && !item.cloudDeleted) || collection;
   const activeRecords = detailCollection ? (syncPhotoSnapshots.get(detailCollection.id) || (detailCollection.id === activeCollectionId ? photos : [])) : [];
   const syncedCount = activeRecords.filter(item => item.cloudSyncStatus === 'success').length;
-  const collectionDetail = detailCollection?.storageMode === 'cloud' ? `<section class="collection-sync-detail">
+  const detailTask = detailCollection && syncTasks.get(`collection:${detailCollection.id}`);
+  const detailRunning = detailTask?.phase === 'running';
+  const autoSyncControl = detailCollection?.storageMode === 'cloud' ? `<label class="collection-auto-sync"><input type="checkbox" data-auto-sync-collection="${escapeHtml(detailCollection.id)}" ${detailCollection.autoSyncNewPhotos !== false ? 'checked' : ''}><span>自动同步新添加的照片</span></label>` : '';
+  const collectionDetail = detailCollection?.storageMode === 'cloud' ? `<section class="collection-sync-detail${syncPanelMode === 'collection' && !detailRunning ? ' compact' : ''}">
+      ${syncPanelMode === 'collection' && !detailRunning ? autoSyncControl : `
       <div class="collection-sync-summary"><div><strong>${escapeHtml(detailCollection.name)}</strong><small>${syncedCount}/${activeRecords.length} 张照片已同步</small></div><span>${activeRecords.length ? Math.round(syncedCount / activeRecords.length * 100) : 100}%</span></div>
       <i style="--sync-progress:${activeRecords.length ? Math.round(syncedCount / activeRecords.length * 100) : 100}%"></i>
-      <label class="collection-auto-sync"><input type="checkbox" data-auto-sync-collection="${escapeHtml(detailCollection.id)}" ${detailCollection.autoSyncNewPhotos !== false ? 'checked' : ''}><span>自动同步新添加的照片</span></label>
+      ${autoSyncControl}
       <div class="collection-photo-progress">${activeRecords.length ? activeRecords.map((item, index) => {
         const status = item.cloudSyncStatus || 'pending';
         const label = { success: '已同步', syncing: '上传中', failed: '同步失败', pending: '等待同步' }[status] || '等待同步';
         return `<div class="collection-photo-sync-row" data-status="${status}"><span>${String(index + 1).padStart(2, '0')}</span><strong>${escapeHtml(item.file?.name || `照片 ${index + 1}`)}</strong><small>${label}</small></div>`;
-      }).join('') : '<p class="sync-empty">这个作品集还没有照片。</p>'}</div>
+      }).join('') : '<p class="sync-empty">这个作品集还没有照片。</p>'}</div>`}
     </section>` : '';
   const collectionRows = collections.filter(collection => !collection.cloudDeleted).map(collection => {
     const task = syncTasks.get(`collection:${collection.id}`);
@@ -659,12 +664,13 @@ function renderSyncStatus() {
   }).join('');
   el['sync-status-body'].innerHTML = `
     ${collectionDetail}
+    ${syncPanelMode === 'collection' ? '' : `
     ${mutationTask?.phase === 'error' ? `<section class="sync-row error"><div><strong>待同步修改</strong><small>${escapeHtml(taskProgress(mutationTask))}</small></div><button type="button" data-sync-mutations>重试</button></section>` : ''}
     <section class="sync-row sync-logo-row${logoTask?.phase === 'error' ? ' error' : ''}">
       <div><strong>我的 LOGO</strong><small>${escapeHtml(logoTask ? taskProgress(logoTask) : '自动同步')}</small></div>
       ${logoTask?.phase === 'error' ? '<button type="button" data-sync-logos>重试</button>' : '<span>自动</span>'}
       ${logoTask?.phase === 'running' ? `<i style="--sync-progress:${Math.round((logoTask.current / Math.max(1, logoTask.total)) * 100)}%"></i>` : ''}
-    </section>${collectionRows}`;
+    </section>${collectionRows}`}`;
 }
 
 function renderPhotoSyncStatus(item = photos[current]) {
@@ -996,8 +1002,9 @@ async function refreshCollectionSyncSnapshot(collectionId = activeCollectionId) 
   return records;
 }
 
-function openSyncPanel(collectionId = activeCollectionId) {
+function openSyncPanel(collectionId = activeCollectionId, mode = 'global') {
   syncDetailCollectionId = collectionId;
+  syncPanelMode = mode;
   closeCanvasInfo();
   renderSyncStatus();
   el['canvas-sync-panel'].classList.add('open');
@@ -1008,7 +1015,7 @@ function openSyncPanel(collectionId = activeCollectionId) {
 
 document.querySelectorAll('.global-sync').forEach(button => button.addEventListener('click', () => {
   if (el['canvas-sync-panel'].classList.contains('open')) closeSyncPanel();
-  else openSyncPanel();
+  else openSyncPanel(activeCollectionId, 'global');
 }));
 el['canvas-sync-close'].addEventListener('click', closeSyncPanel);
 el['sync-status-body'].addEventListener('click', event => {
@@ -1072,7 +1079,7 @@ function requestCollectionSync(collectionId) {
     return;
   }
   if (collection?.storageMode === 'cloud') {
-    openSyncPanel(collection.id);
+    openSyncPanel(collection.id, 'collection');
     return;
   }
   closeSyncPanel();
@@ -1087,7 +1094,7 @@ function requestCollectionSync(collectionId) {
 el['collection-sync'].addEventListener('click', () => {
   const collection = activeCollection();
   const task = collection && syncTasks.get(`collection:${collection.id}`);
-  if (collection?.storageMode === 'cloud' || task?.phase === 'running') openSyncPanel();
+  if (collection?.storageMode === 'cloud' || task?.phase === 'running') openSyncPanel(activeCollectionId, 'collection');
   else requestCollectionSync(activeCollectionId);
 });
 el['photo-sync'].addEventListener('click', () => {

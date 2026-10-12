@@ -505,6 +505,8 @@ button { color: inherit; }
 .sync-row > span { color: #aaa49a; font-size: .5rem; letter-spacing: .08em; }
 .sync-row > i { position: absolute; right: 0; bottom: 0; left: 0; height: 1px; background: linear-gradient(to right, var(--ink) var(--sync-progress), var(--line) var(--sync-progress)); }
 .collection-sync-detail { border-bottom: 1px solid var(--line); padding: .85rem 0 .55rem; }
+.collection-sync-detail.compact { border-bottom: 0; padding: .35rem 0 0; }
+.collection-sync-detail.compact .collection-auto-sync { margin-top: 0; }
 .collection-sync-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: end; }
 .collection-sync-summary strong, .collection-sync-summary small { display: block; }
 .collection-sync-summary strong { overflow: hidden; font-family: "Noto Serif SC", serif; font-size: .72rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
@@ -679,14 +681,16 @@ button { color: inherit; }
 }
 .icon-button:hover { transform: translateY(-2px); }
 .secondary-icon { border-color: var(--line); background: transparent; color: var(--ink); }
+.collection-sync { position: relative; }
+.collection-sync .collection-sync-state { position: absolute; right: .22rem; bottom: .2rem; width: .62rem; height: .62rem; }
 .collection-sync .collection-sync-spinner,
 .collection-sync .collection-sync-check { display: none; }
 .collection-sync.syncing { border-color: #ad6d34; background: #b8753d; color: #fff8ee; }
-.collection-sync.syncing .collection-sync-cloud { display: none; }
 .collection-sync.syncing .collection-sync-spinner { display: block; animation: sync-spin 1s linear infinite; }
-.collection-sync.synced { border-color: #5f765d; background: #687f65; color: #f5f3ed; }
-.collection-sync.synced .collection-sync-cloud { display: none; }
-.collection-sync.synced .collection-sync-check { display: block; stroke-width: 2; }
+.collection-sync.syncing .collection-sync-upload,
+.collection-sync.synced .collection-sync-upload { display: none; }
+.collection-sync.synced { border-color: var(--line); background: transparent; color: #777168; }
+.collection-sync.synced .collection-sync-check { display: block; color: #698367; stroke-width: 2.2; }
 .collection-sync.sync-error { border-color: #8b5a51; color: #8b5a51; }
 @keyframes sync-pulse { 50% { opacity: .35; transform: translateY(-1px); } }
 .icon-button svg,
