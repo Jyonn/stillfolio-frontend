@@ -6,6 +6,7 @@ import { createReadonlyCanvas, layoutReadonlyCanvas } from './readonly-canvas.js
 import { toBlob } from 'html-to-image';
 import { apiUrl } from './api-origin.js';
 import { PageFlip } from 'page-flip';
+import { prepareShareQr } from './logo-display.js';
 import './share-album.css';
 
 const app = document.querySelector('#app');
@@ -105,10 +106,15 @@ export async function renderSharedCollection(token) {
     if (!response.ok) throw new Error(collection.detail || '无法打开这个作品集');
     const photos = (Array.isArray(collection.photos) ? collection.photos : []).map(photoRecord);
     const customLogoUrl = await sharedLogoUrl(collection.custom_logo).catch(() => '');
+    const qrUrl = collection.display_settings?.logoShareQr ? await prepareShareQr(`/share/${token}`) : '';
+    const owner = collection.owner;
+    const avatarUrl = owner?.avatar ? await sharedLogoUrl(owner.avatar).catch(() => '') : '';
+    const avatarIndex = Math.max(0, Math.min(35, Number(owner?.avatar_value) || 0));
+    const authorMarkup = owner ? `<div class="album-author"><span class="album-author-avatar${avatarUrl ? ' custom-avatar' : ' avatar-sprite'}" style="${avatarUrl ? `background-image:url('${avatarUrl}')` : `--avatar-column:${avatarIndex % 6};--avatar-row:${Math.floor(avatarIndex / 6)}`}"></span><span>${escapeHtml(owner.nickname)}</span></div>` : '';
     document.title = `${collection.name} · 留幅 STILLFOLIO`;
     app.innerHTML = `<main class="shared-page shared-album">
       <header class="album-heading"><a href="/" aria-label="留幅"><img src="${brandLogoUrl}" alt="留幅"></a>
-        <div><h1>${escapeHtml(collection.name)}</h1>${collection.description ? `<p>${escapeHtml(collection.description)}</p>` : ''}</div>
+        <div><h1>${escapeHtml(collection.name)}</h1>${collection.description ? `<p>${escapeHtml(collection.description)}</p>` : ''}${authorMarkup}</div>
       </header>
       <section class="album-stage shared-artboard-wrap canvas-locked" aria-label="共享作品集画布"><div class="album-book"></div></section>
       <nav class="album-navigation shared-controls" aria-label="画布操作">
@@ -135,7 +141,7 @@ export async function renderSharedCollection(token) {
       const page = document.createElement('div');
       page.className = 'album-sheet';
       page.dataset.density = 'hard';
-      page.innerHTML = createReadonlyCanvas({...photo, content_url: EMPTY_IMAGE}, index, photos.length, collection.display_settings, {logoUrl: customLogoUrl});
+      page.innerHTML = createReadonlyCanvas({...photo, content_url: EMPTY_IMAGE}, index, photos.length, collection.display_settings, {logoUrl: customLogoUrl, qrUrl});
       return page;
     });
     function layoutPage(index) {
@@ -299,7 +305,7 @@ export async function renderSharedCollection(token) {
       document.body.appendChild(exportHost);
       try {
         const url = await cachedSharedImage(photo, 'full');
-        exportHost.innerHTML = createReadonlyCanvas({...photo, content_url: url}, index, photos.length, collection.display_settings, {logoUrl: customLogoUrl});
+        exportHost.innerHTML = createReadonlyCanvas({...photo, content_url: url}, index, photos.length, collection.display_settings, {logoUrl: customLogoUrl, qrUrl});
         const image = exportHost.querySelector('.preview-photo');
         await loadImageElement(image, url);
         await document.fonts?.ready;

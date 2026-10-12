@@ -9,6 +9,7 @@ import { createWindowedCarousel } from './carousel.js';
 import { cloneDisplaySettings, DEFAULT_DISPLAY_SETTINGS, PROPERTY_LABELS, SLOT_KEYS, slotData } from './display-settings.js';
 import brandLogoUrl from './assets/stillfolio-logo.svg?url';
 import QRCode from 'qrcode';
+import { logoMarkup, prepareShareQr, shareQrUrl } from './logo-display.js';
 
 const logoUrl = brandLogoUrl;
 
@@ -195,6 +196,7 @@ app.innerHTML = `
       <form class="collection-form">
         <label for="collection-input">作品集名称</label>
         <input class="collection-input" id="collection-input" type="text" maxlength="40" autocomplete="off" placeholder="例如：光抵达的地方" aria-label="作品集名称">
+        <details class="collection-description-disclosure"><summary>添加作品集说明（可选）</summary><label for="collection-description">作品集说明</label><textarea id="collection-description" maxlength="2000" rows="3" placeholder="记录这组照片的故事"></textarea></details>
         <div><button class="collection-form-cancel" type="button">取消</button><button class="collection-form-save" type="submit">创建</button></div>
       </form>
     </section>
@@ -204,9 +206,15 @@ app.innerHTML = `
     <section class="collection-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="collection-settings-title">
       <header><div><p class="eyebrow">PHOTO FOLIO</p><h2 id="collection-settings-title">作品集设置</h2></div><button class="collection-settings-close" type="button" aria-label="关闭作品集设置">×</button></header>
       <div class="collection-settings-actions">
-        <button class="collection-rename-action" type="button"><span>重命名作品集</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+        <button class="collection-rename-action" type="button"><span>作品集信息</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
         <button class="collection-delete-action" type="button"><span>删除作品集</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
       </div>
+      <form class="collection-information" hidden>
+        <button class="user-panel-back collection-information-back" type="button">〈 返回</button>
+        <label for="collection-information-name">作品集名称</label><input id="collection-information-name" maxlength="40" required autocomplete="off">
+        <label for="collection-information-description">作品集说明（可选）</label><textarea id="collection-information-description" maxlength="2000" rows="4"></textarea>
+        <div class="collection-information-footer"><button class="primary" type="submit">保存</button></div>
+      </form>
     </section>
   </div>
   <div class="collection-delete-modal" aria-hidden="true">
@@ -773,9 +781,11 @@ async function restoreCloudCollections() {
     const hasPendingCollectionUpdate = cloudMutationQueue.has(cloudUser.id, `collection:${collection.id}`);
     if (!hasPendingCollectionUpdate) {
       collection.name = remote.name;
+      collection.description = remote.description || '';
       collection.settings = cloneDisplaySettings(remote.display_settings || DEFAULT_DISPLAY_SETTINGS);
     }
     collection.cloudId = remote.id;
+    collection.sharePath = remote.share_path || collection.sharePath || '';
     collection.cloudOwnerId = cloudUser.id;
     collection.storageMode = 'cloud';
     collection.cloudDeleted = false;
@@ -1148,6 +1158,8 @@ el['collection-share'].addEventListener('click', async () => {
   el['collection-share'].disabled = true;
   try {
     const share = await cloudSyncRepository.shareCollection(collection.cloudId);
+    collection.sharePath = share.path;
+    saveCollections(collections, activeCollectionId);
     const url = new URL(share.path, window.location.origin).href;
     document.querySelector('.share-collection-name').textContent = collection.name;
     el['share-link'].value = url;
@@ -2001,7 +2013,7 @@ function applyLocationVisibility(root, item, settings = displaySettings) {
 function slotMarkup(type, item, index, total = photos.length, settings = displaySettings, slot = 'topLeft') {
   const data = slotData(type, item, index, total, settings, fmt, slot);
   if (data.type === 'hidden' || (canvasLocked && data.missing)) return '';
-  if (data.type === 'logo') return `<img class="slot-logo" src="${selectedLogoUrl(settings)}" alt="LOGO" />`;
+  if (data.type === 'logo') return logoMarkup(selectedLogoUrl(settings), settings.logoShareQr && activeCollection().cloudId ? shareQrUrl(activeCollection().sharePath) : '');
   return `${data.label ? `<span class="technical-label">${escapeHtml(data.label)}</span>` : ''}${data.lines.map(line => `<span class="technical-value">${escapeHtml(line)}</span>`).join('')}`;
 }
 
@@ -2011,6 +2023,12 @@ function slotIsHidden(type, item, index, settings, slot) {
 }
 
 function updateDisplaySlots(item, index = current, root = activeSlide, settings = displaySettings) {
+  const sharePath = activeCollection().sharePath;
+  if (settings.logoShareQr && sharePath && !shareQrUrl(sharePath)) {
+    prepareShareQr(sharePath).then(() => {
+      if (root?.isConnected && activeCollection().sharePath === sharePath) updateDisplaySlots(item, index, root, settings);
+    }).catch(error => console.warn('分享二维码生成失败', error));
+  }
   for (const [slot, selector] of Object.entries({
     topLeft: '.slot-top-left', topRight: '.slot-top-right',
     bottomLeft: '.slot-bottom-left', bottomRight: '.slot-bottom-right',
@@ -2193,6 +2211,7 @@ function displayConfigMarkup(slot, type) {
         ${customLogos.map((logo, index) => `<button type="button" data-logo-id="${logo.id}" aria-label="自定义 LOGO ${index + 1}" aria-checked="${displayDraft.customLogoEnabled && displayDraft.customLogoId === logo.id}" class="${displayDraft.customLogoEnabled && displayDraft.customLogoId === logo.id ? 'active' : ''}"><img src="${logo.url}" alt=""></button>`).join('')}
         <button class="logo-add-choice" type="button" data-add-logo aria-label="新增 LOGO" title="新增 LOGO"><span>＋</span></button>
       </div>
+      ${activeCollection().cloudId ? `<label class="logo-share-setting"><input type="checkbox" data-logo-share-qr${displayDraft.logoShareQr ? ' checked' : ''}><span>在 LOGO 右侧展示分享二维码</span></label>` : ''}
     </div>`;
   if (type === 'location') return `
     <div class="slot-config location-config">
@@ -2363,6 +2382,25 @@ el['display-settings-list'].addEventListener('click', event => {
   renderDisplaySettings();
 });
 el['display-settings-list'].addEventListener('change', async event => {
+  if (event.target.matches('[data-logo-share-qr]')) {
+    const checkbox = event.target;
+    const collection = activeCollection();
+    if (!checkbox.checked) { displayDraft.logoShareQr = false; previewDisplayDraft(); return; }
+    checkbox.disabled = true;
+    try {
+      if (!collection.sharePath) {
+        const share = await cloudSyncRepository.shareCollection(collection.cloudId);
+        collection.sharePath = share.path;
+        saveCollections(collections, activeCollectionId);
+      }
+      await prepareShareQr(collection.sharePath);
+      if (displayDraft && activeCollectionId === collection.id) { displayDraft.logoShareQr = true; previewDisplayDraft(); }
+    } catch (error) {
+      checkbox.checked = false;
+      showAccountMessage(`无法生成分享二维码：${error.message}`, true);
+    } finally { checkbox.disabled = false; }
+    return;
+  }
   const longPhotoMode = event.target.dataset.longPhotoMode;
   if (longPhotoMode && event.target.checked) {
     displayDraft.longPhotoDefaultMode = longPhotoMode;
@@ -2742,13 +2780,12 @@ el['mobile-collection-new'].addEventListener('click', () => {
   openCollectionForm({ openEditorOnCreate: true });
 });
 
-function openCollectionForm({ mode = 'new', openEditorOnCreate = false } = {}) {
+function openCollectionForm({ openEditorOnCreate = false } = {}) {
   closeCollectionMenu();
-  el['collection-form'].dataset.mode = mode;
   el['collection-form'].dataset.openEditorOnCreate = String(openEditorOnCreate);
-  el['collection-input'].value = mode === 'rename' ? activeCollection().name : '';
-  document.querySelector('#collection-dialog-title').textContent = mode === 'rename' ? '重命名作品集' : '新建作品集';
-  document.querySelector('.collection-form-save').textContent = mode === 'rename' ? '保存' : '创建';
+  el['collection-input'].value = '';
+  document.querySelector('#collection-description').value = '';
+  document.querySelector('.collection-description-disclosure').open = false;
   el['collection-modal'].classList.add('open');
   el['collection-modal'].setAttribute('aria-hidden', 'false');
   document.body.classList.add('modal-open');
@@ -2766,6 +2803,8 @@ function closeCollectionForm() {
 
 function openCollectionSettings() {
   closeCollectionMenu();
+  document.querySelector('.collection-settings-actions').hidden = false;
+  document.querySelector('.collection-information').hidden = true;
   el['collection-settings-modal'].classList.add('open');
   el['collection-settings-modal'].setAttribute('aria-hidden', 'false');
   document.body.classList.add('modal-open');
@@ -2817,8 +2856,30 @@ el['collection-settings-trigger'].addEventListener('click', openCollectionSettin
 el['collection-settings-close'].addEventListener('click', closeCollectionSettings);
 document.querySelector('.collection-settings-backdrop').addEventListener('click', closeCollectionSettings);
 el['collection-rename-action'].addEventListener('click', () => {
-  closeCollectionSettings();
-  openCollectionForm({ mode: 'rename' });
+  document.querySelector('.collection-settings-actions').hidden = true;
+  document.querySelector('.collection-information').hidden = false;
+  document.querySelector('#collection-information-name').value = activeCollection().name;
+  document.querySelector('#collection-information-description').value = activeCollection().description || '';
+  document.querySelector('#collection-information-name').focus();
+});
+document.querySelector('.collection-information-back').addEventListener('click', () => {
+  document.querySelector('.collection-information').hidden = true;
+  document.querySelector('.collection-settings-actions').hidden = false;
+  el['collection-rename-action'].focus();
+});
+document.querySelector('.collection-information').addEventListener('submit', event => {
+  event.preventDefault();
+  const name = document.querySelector('#collection-information-name').value.trim();
+  if (!name) return document.querySelector('#collection-information-name').focus();
+  const description = document.querySelector('#collection-information-description').value.trim();
+  const collection = activeCollection();
+  if (collection.name !== name || (collection.description || '') !== description) {
+    Object.assign(collection, { name, description });
+    saveCollections(collections, activeCollectionId);
+    queueCloudMutation(`collection:${collection.id}`, 'collection-metadata', { collectionId: collection.id }, collection);
+    renderCollections();
+  }
+  document.querySelector('.collection-information-back').click();
 });
 el['collection-delete-action'].addEventListener('click', () => openCollectionDeleteConfirmation());
 el['collection-delete-cancel'].addEventListener('click', closeCollectionDeleteConfirmation);
@@ -2839,19 +2900,9 @@ el['collection-form'].addEventListener('submit', async event => {
   event.preventDefault();
   const name = el['collection-input'].value.trim();
   if (!name) return el['collection-input'].focus();
-  if (el['collection-form'].dataset.mode === 'rename') {
-    const collection = activeCollection();
-    if (collection.name !== name) {
-      collection.name = name;
-      saveCollections(collections, activeCollectionId);
-      queueCloudMutation(`collection:${collection.id}`, 'collection-metadata', { collectionId: collection.id }, collection);
-      renderCollections();
-    }
-    closeCollectionForm();
-    return;
-  }
   const openEditorOnCreate = el['collection-form'].dataset.openEditorOnCreate === 'true';
   const collection = createCollection(name, displaySettings);
+  collection.description = document.querySelector('#collection-description').value.trim();
   collections.push(collection);
   saveCollections(collections, collection.id);
   await switchCollection(collection.id, { empty: true });
@@ -2993,6 +3044,8 @@ function exportTypography(canvasWidth) {
 }
 
 async function renderExport(item, index) {
+  const qrUrl = displaySettings.logoShareQr && activeCollection().cloudId ? await prepareShareQr(activeCollection().sharePath) : '';
+  const qrImage = qrUrl ? await loadImage(qrUrl) : null;
   const canvas = document.createElement('canvas');
   canvas.width = 2160;
   canvas.height = 2880;
@@ -3108,11 +3161,15 @@ async function renderExport(item, index) {
     if (data.type === 'logo') {
       const maxWidth = canvas.width * (top ? .14815 : .235);
       const maxHeight = canvas.height * (top ? .04 : .05);
-      const logoScale = Math.min(maxWidth / logo.naturalWidth, maxHeight / logo.naturalHeight);
+      const qrSize = qrImage ? maxHeight : 0;
+      const gap = qrImage ? canvas.width * .008 : 0;
+      const logoScale = Math.min((maxWidth - qrSize - gap) / logo.naturalWidth, maxHeight / logo.naturalHeight);
       const width = logo.naturalWidth * logoScale;
       const height = logo.naturalHeight * logoScale;
-      const logoX = right ? x - width : x;
-      ctx.drawImage(logo, logoX, top ? canvas.height * .075 : 2680, width, height);
+      const logoX = right ? x - width - qrSize - gap : x;
+      const logoY = top ? canvas.height * .075 : 2680;
+      ctx.drawImage(logo, logoX, logoY + (qrSize ? (maxHeight - height) / 2 : 0), width, height);
+      if (qrImage) ctx.drawImage(qrImage, logoX + width + gap, logoY, qrSize, qrSize);
       return;
     }
     const labelY = top

@@ -1,5 +1,6 @@
 import { cloneDisplaySettings, SLOT_KEYS, slotData } from './display-settings.js';
 import brandLogoUrl from './assets/stillfolio-logo.svg?url';
+import { logoMarkup } from './logo-display.js';
 import { applyInlineCrop, cropLayout, needsCrop } from './crop-layout.js';
 
 const fmt = {
@@ -12,10 +13,10 @@ function escapeHtml(value = '') {
   return String(value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 }
 
-function slotMarkup(type, item, index, total, settings, slot, selectedLogoUrl) {
+function slotMarkup(type, item, index, total, settings, slot, selectedLogoUrl, qrUrl) {
   const data = slotData(type, item, index, total, settings, fmt, slot);
   if (data.type === 'hidden' || data.missing) return { markup: '', hidden: true };
-  if (data.type === 'logo') return { markup: `<img class="slot-logo" src="${selectedLogoUrl}" alt="LOGO">`, hidden: false };
+  if (data.type === 'logo') return { markup: logoMarkup(selectedLogoUrl, settings.logoShareQr ? qrUrl : ''), hidden: false };
   return { markup: `${data.label ? `<span class="technical-label">${escapeHtml(data.label)}</span>` : ''}${data.lines.map(line => `<span class="technical-value">${escapeHtml(line)}</span>`).join('')}`, hidden: false };
 }
 
@@ -27,7 +28,7 @@ function hasCoordinates(item) {
 export function createReadonlyCanvas(photo, index, total, rawSettings, options = {}) {
   const settings = cloneDisplaySettings(rawSettings);
   const selectedLogoUrl = options.logoUrl || brandLogoUrl;
-  const slots = Object.fromEntries(SLOT_KEYS.map(slot => [slot, slotMarkup(settings[slot], photo, index, total, settings, slot, selectedLogoUrl)]));
+  const slots = Object.fromEntries(SLOT_KEYS.map(slot => [slot, slotMarkup(settings[slot], photo, index, total, settings, slot, selectedLogoUrl, options.qrUrl)]));
   const place = String(photo.places?.[settings.locationService] || photo.place || '').trim();
   const coordinates = hasCoordinates(photo) ? `${fmt.coord(photo.exif.latitude, 'N', 'S')}, ${fmt.coord(photo.exif.longitude, 'E', 'W')}` : '';
   const mode = settings.locationDisplayMode || 'both';

@@ -10,6 +10,9 @@
 .album-heading > a { position: absolute; left: .3rem; top: .3rem; }
 .album-heading img { width: 5.2rem; height: 2rem; object-fit: contain; }
 .album-heading h1 { margin: 0; font: 500 1.15rem/1.5 "Noto Serif SC", serif; }
+.album-author { display: flex; justify-content: center; align-items: center; gap: .5rem; margin-top: .65rem; font-size: .65rem; color: var(--muted); }
+.album-heading .album-author-avatar { display: block; flex: none; width: 1.65rem; height: 1.65rem; border: 1px solid var(--ink); }
+.album-author-avatar.custom-avatar { background-position: center; background-size: cover; background-repeat: no-repeat; }
 .album-heading p { max-width: 36rem; margin: .4rem auto 0; color: var(--muted); font-size: .65rem; line-height: 1.7; }
 .shared-album .album-stage {
   width: 100%; min-height: 0; height: 100%; padding: 0;

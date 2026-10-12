@@ -11,6 +11,7 @@ export const DEFAULT_DISPLAY_SETTINGS = {
   bottomRight: 'logo',
   customLogoEnabled: false,
   customLogoId: '',
+  logoShareQr: false,
   locationVisible: true,
   locationService: 'amap',
   locationDisplayMode: 'both',

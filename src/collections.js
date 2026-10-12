@@ -11,6 +11,7 @@ export function createCollection(name, settings, collectionId = id()) {
   return {
     id: collectionId,
     name: String(name || '未命名作品集').trim() || '未命名作品集',
+    description: '',
     settings: cloneDisplaySettings(settings),
     autoSyncNewPhotos: true,
     createdAt: Date.now(),
