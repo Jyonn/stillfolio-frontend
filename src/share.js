@@ -2,7 +2,7 @@ import './style.css';
 import './share.css';
 import './share-controls.css';
 import brandLogoUrl from './assets/stillfolio-logo.svg?url';
-import { createReadonlyCanvas } from './readonly-canvas.js';
+import { createReadonlyCanvas, layoutReadonlyCanvas } from './readonly-canvas.js';
 import { toBlob } from 'html-to-image';
 import { apiUrl } from './api-origin.js';
 
@@ -12,6 +12,15 @@ const EMPTY_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='
 const sharedImageUrls = new Map();
 const sharedImageRequests = new Map();
 const sharedImageFetches = new Map();
+
+async function sharedLogoUrl(asset) {
+  if (!asset?.content_url) return '';
+  const url = new URL(apiUrl(asset.content_url), window.location.origin);
+  url.searchParams.set('v', asset.updated_at || asset.id);
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('自定义 LOGO 加载失败');
+  return URL.createObjectURL(await response.blob());
+}
 
 function escapeHtml(value = '') {
   return String(value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
@@ -102,6 +111,10 @@ export async function renderSharedCollection(token) {
     const collection = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(collection.detail || '无法打开这个作品集');
     const photos = (Array.isArray(collection.photos) ? collection.photos : []).map(photoRecord);
+    const customLogoUrl = await sharedLogoUrl(collection.custom_logo).catch(error => {
+      console.warn(error.message);
+      return '';
+    });
     let current = 0;
     document.title = `${collection.name} · 留幅 STILLFOLIO`;
     app.innerHTML = `<main class="shared-page"><header class="workspace-heading shared-header"><a href="/" aria-label="留幅 STILLFOLIO"><img src="${brandLogoUrl}" alt="留幅 STILLFOLIO"></a><div class="workspace-title-row"><h1>${escapeHtml(collection.name)}</h1><small>${photos.length} PHOTOGRAPHS · 只读</small></div></header><section class="artboard-wrap shared-artboard-wrap canvas-locked" aria-label="共享作品集画布"><div class="carousel-viewport"><div class="carousel-track"><div class="carousel-slide active-slide"><div class="artboard-frame"><div class="shared-canvas-host"></div></div></div></div></div><nav class="shared-canvas-tools shared-controls playing" aria-label="画布操作"><button class="shared-autoplay" type="button" aria-label="暂停自动轮播" aria-pressed="true"><svg class="pause-icon" viewBox="0 0 24 24"><path d="M9 7v10M15 7v10"/></svg><svg class="play-icon" viewBox="0 0 24 24"><path d="m9 7 8 5-8 5z"/></svg></button><button class="shared-download" type="button" aria-label="下载当前画布"><svg viewBox="0 0 24 24"><path d="M12 4v12m0 0 4.5-4.5M12 16l-4.5-4.5M5 20h14"/></svg><span>下载当前画布</span></button></nav><nav class="folio-nav shared-progress" role="tablist" aria-label="照片切换"></nav></section><footer class="shared-footer"><span>留幅 STILLFOLIO</span><span>只读作品集</span></footer></main>`;
@@ -156,6 +169,7 @@ export async function renderSharedCollection(token) {
         fullApplying = true;
         await loadImageElement(image, url);
         if (revision !== renderRevision) return;
+        layoutReadonlyCanvas(host, photo);
         fullReady = true;
         stage.classList.remove('shared-image-thumbnail', 'shared-image-loading');
         const nextPreloadRevision = ++preloadRevision;
@@ -176,7 +190,7 @@ export async function renderSharedCollection(token) {
       }
       const revision = ++renderRevision;
       preloadRevision += 1;
-      host.innerHTML = createReadonlyCanvas({ ...photos[current], content_url: EMPTY_IMAGE }, current, photos.length, collection.display_settings);
+      host.innerHTML = createReadonlyCanvas({ ...photos[current], content_url: EMPTY_IMAGE }, current, photos.length, collection.display_settings, { logoUrl: customLogoUrl });
       releaseInactiveImageUrls(photos[current]);
       progress.innerHTML = photos.map((_, index) => `<button type="button" role="tab" data-index="${index}" aria-selected="${index === current}" class="folio-segment${index === current ? ' active' : ''}" aria-label="第 ${index + 1} 张"></button>`).join('');
       hydrateCurrentImage(photos[current], revision);
@@ -220,6 +234,7 @@ export async function renderSharedCollection(token) {
         const image = artboard.querySelector('.photo-stage img');
         const fullUrl = await cachedSharedImage(exportPhoto, 'full');
         if (image && image.src !== fullUrl) await loadImageElement(image, fullUrl);
+        layoutReadonlyCanvas(host, exportPhoto);
         image?.closest('.photo-stage')?.classList.remove('shared-image-thumbnail', 'shared-image-loading');
         const blob = await toBlob(artboard, { backgroundColor: '#f5f3ed', pixelRatio: 2160 / Math.max(1, artboard.getBoundingClientRect().width) });
         if (!blob) throw new Error('画布导出失败');

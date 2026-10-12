@@ -1,4 +1,4 @@
-body { background: #dedbd3; }
+html, body, #app { min-height: 100%; background: var(--paper); }
 
 .shared-loading,
 .shared-error {

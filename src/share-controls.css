@@ -1,6 +1,6 @@
 /* The shared view deliberately reuses the portfolio detail canvas classes. */
-.shared-page { min-height: 100dvh; background: #dedbd3; }
-.shared-header { position: fixed; z-index: 10; top: 0; right: 0; left: 0; height: 3.6rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgb(32 31 27 / 10%); padding: 0 2rem; background: rgb(222 219 211 / 94%); }
+.shared-page { min-height: 100dvh; background: var(--paper); }
+.shared-header { position: fixed; z-index: 10; top: 0; right: 0; left: 0; height: 3.6rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgb(32 31 27 / 10%); padding: 0 2rem; background: rgb(245 243 237 / 94%); }
 .shared-header > a { width: 7.7rem; line-height: 0; }
 .shared-header > a img { width: 100%; height: 2.8rem; object-fit: contain; object-position: left center; }
 .shared-header .workspace-title-row { display: flex; align-items: baseline; gap: .8rem; }
@@ -21,7 +21,6 @@
 .shared-progress { width: 100%; grid-column: auto; }
 .shared-progress .folio-segment { position: relative; overflow: hidden; }
 .shared-controls.playing ~ .shared-progress .folio-segment.active::after { position: absolute; top: calc(50% - .5px); right: 0; left: 0; height: 1px; content: ""; background: var(--ink); transform: scaleX(0); transform-origin: left center; animation: shared-autoplay-progress 5s linear forwards; }
-.shared-cropped { object-fit: cover; object-position: var(--share-crop-x) var(--share-crop-y); }
 .shared-artboard-wrap .photo-stage { isolation: isolate; }
 .shared-artboard-wrap .photo-stage::after { position: absolute; z-index: 2; top: 50%; left: 50%; width: 1.05rem; height: 1.05rem; border: 1px solid rgb(245 243 237 / 42%); border-top-color: rgb(245 243 237 / 92%); border-radius: 50%; content: ""; opacity: 0; pointer-events: none; transform: translate(-50%, -50%); }
 .shared-artboard-wrap .photo-stage.shared-image-loading::after { opacity: 1; animation: shared-image-loading .85s linear infinite; }
@@ -41,13 +40,13 @@
 }
 @media (max-width: 860px) {
   html, body, #app { min-height: 100%; overflow: auto; }
-  .shared-page { padding: .75rem .75rem 1.25rem; }
-  .shared-header { right: .75rem; left: .75rem; height: 2.35rem; padding: 0 5.1rem 0 .45rem; background: #dedbd3; }
+  .shared-page { min-height: 100dvh; padding: 0 .75rem; }
+  .shared-header { right: .75rem; left: .75rem; height: 2.35rem; padding: 0 5.1rem 0 .45rem; background: var(--paper); }
   .shared-header > a { display: none; }
   .shared-header .workspace-title-row { min-width: 0; gap: .55rem; }
   .shared-header h1 { overflow: hidden; font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
   .shared-header small { display: none; }
-  .shared-artboard-wrap { width: min(100%, 42rem); min-height: 0; align-content: start; padding-top: 2.35rem; }
+  .shared-artboard-wrap { width: min(100%, 42rem); min-height: 100dvh; align-content: center; padding-top: calc(2.35rem + var(--safe-top)); padding-bottom: var(--safe-bottom); }
   .shared-canvas-tools { top: .25rem; right: .45rem; left: auto; display: flex; gap: .4rem; }
   .shared-controls > button { width: 1.9rem; height: 1.9rem; }
   .shared-progress { margin-top: .75rem; }
