@@ -1267,6 +1267,13 @@ button { color: inherit; }
   .photo-sync { color: #625e57; opacity: .76; }
   .canvas-info-panel { top: 11.1rem; max-height: min(34rem, calc(100dvh - 12rem)); }
   .canvas-sync-panel { max-height: min(31rem, calc(100dvh - 6rem)); }
+  .canvas-sync-panel.collection-sync-panel {
+    top: 4rem;
+    right: 2rem;
+    bottom: auto;
+    left: auto;
+    transform: translateY(-.35rem);
+  }
   .collection-heading { flex: 1 1 auto; min-height: 0; margin: 0; }
   .collection-trigger { display: none; }
   .collection-menu,
@@ -1369,6 +1376,15 @@ button { color: inherit; }
     width: min(21rem, calc(100% - .9rem));
     max-height: min(30rem, 65dvh);
     transform: translateY(-.35rem);
+  }
+  .canvas-sync-panel.collection-sync-panel {
+    top: auto;
+    right: .75rem;
+    bottom: 5.2rem;
+    left: .75rem;
+    width: auto;
+    max-height: min(30rem, calc(100dvh - 7rem));
+    transform: translateY(.35rem);
   }
   .panel-topline {
     position: absolute;

@@ -115,7 +115,7 @@ app.innerHTML = `
         <button class="customize icon-button secondary-icon" type="button" aria-label="自定义展示" title="自定义展示">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2m4 0h10M14 4v6M10 14v6"/></svg>
         </button>
-        <button class="collection-sync icon-button secondary-icon" type="button" aria-label="同步当前作品集" title="同步当前作品集">
+        <button class="collection-sync icon-button secondary-icon" type="button" aria-label="同步当前作品集" title="同步当前作品集" aria-expanded="false">
           <svg class="collection-sync-cloud" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 18h10.1a4.2 4.2 0 0 0 .7-8.3A6.1 6.1 0 0 0 6.5 8.2 4.9 4.9 0 0 0 7.2 18Z"/><path class="collection-sync-upload" d="m9 13 3-3 3 3M12 10v6"/></svg>
           <svg class="collection-sync-state collection-sync-spinner" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M17 3.8h3.2V7"/></svg>
           <svg class="collection-sync-state collection-sync-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m7.5 12.5 3 3 6-7"/></svg>
@@ -895,6 +895,12 @@ function setPhotoCloudStatus(record, status, updatedAt = record.cloudUpdatedAt) 
     visible.cloudSyncStatus = status;
     visible.cloudUpdatedAt = updatedAt;
   }
+  for (const snapshot of syncPhotoSnapshots.values()) {
+    const snapshotRecord = snapshot.find(item => item.id === record.id);
+    if (!snapshotRecord || snapshotRecord === record) continue;
+    snapshotRecord.cloudSyncStatus = status;
+    snapshotRecord.cloudUpdatedAt = updatedAt;
+  }
 }
 
 async function uploadCollectionRecords(collection, allRecords, pendingRecords) {
@@ -1005,8 +1011,10 @@ async function resumeInterruptedCollectionUploads(remoteCollections = []) {
 
 function closeSyncPanel() {
   el['canvas-sync-panel'].classList.remove('open');
+  el['canvas-sync-panel'].classList.remove('collection-sync-panel');
   el['canvas-sync-panel'].setAttribute('aria-hidden', 'true');
   document.querySelectorAll('.global-sync').forEach(button => button.setAttribute('aria-expanded', 'false'));
+  el['collection-sync'].setAttribute('aria-expanded', 'false');
 }
 
 async function refreshCollectionSyncSnapshot(collectionId = activeCollectionId) {
@@ -1021,9 +1029,11 @@ function openSyncPanel(collectionId = activeCollectionId, mode = 'global') {
   syncPanelMode = mode;
   closeCanvasInfo();
   renderSyncStatus();
+  el['canvas-sync-panel'].classList.toggle('collection-sync-panel', mode === 'collection');
   el['canvas-sync-panel'].classList.add('open');
   el['canvas-sync-panel'].setAttribute('aria-hidden', 'false');
-  document.querySelectorAll('.global-sync').forEach(target => target.setAttribute('aria-expanded', 'true'));
+  document.querySelectorAll('.global-sync').forEach(target => target.setAttribute('aria-expanded', String(mode === 'global')));
+  el['collection-sync'].setAttribute('aria-expanded', String(mode === 'collection'));
   refreshCollectionSyncSnapshot(collectionId);
 }
 
