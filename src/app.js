@@ -116,7 +116,9 @@ app.innerHTML = `
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2m4 0h10M14 4v6M10 14v6"/></svg>
         </button>
         <button class="collection-sync icon-button secondary-icon" type="button" aria-label="同步当前作品集" title="同步当前作品集">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 18h10.1a4.2 4.2 0 0 0 .7-8.3A6.1 6.1 0 0 0 6.5 8.2 4.9 4.9 0 0 0 7.2 18Z"/><path d="m9 13 3-3 3 3M12 10v6"/></svg>
+          <svg class="collection-sync-cloud" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 18h10.1a4.2 4.2 0 0 0 .7-8.3A6.1 6.1 0 0 0 6.5 8.2 4.9 4.9 0 0 0 7.2 18Z"/><path d="m9 13 3-3 3 3M12 10v6"/></svg>
+          <svg class="collection-sync-spinner" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M17 3.8h3.2V7"/></svg>
+          <svg class="collection-sync-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m7.5 12.5 3 3 6-7"/></svg>
         </button>
         <button class="collection-share icon-button secondary-icon" type="button" aria-label="分享当前作品集" title="分享当前作品集" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="2.2"/><circle cx="17" cy="6" r="2.2"/><circle cx="17" cy="18" r="2.2"/><path d="m9 11 6-3.7M9 13l6 3.7"/></svg>
@@ -478,10 +480,13 @@ function showUserPanel(name = '') {
 let cloudUser = null;
 let codeCooldownTimer = null;
 const syncTasks = new Map();
+const syncPhotoSnapshots = new Map();
+let syncDetailCollectionId = activeCollectionId;
 const remoteLogoAssets = new Map();
 let logoSyncPromise = null;
 let mutationFlushPromise = null;
 let mutationFlushScheduled = false;
+const collectionSyncPromises = new Map();
 localStorage.removeItem('stillfolio-hidden-cloud-logos-v1');
 
 function collectionCloudOwner(collection = activeCollection()) {
@@ -597,7 +602,9 @@ function setSyncTask(key, next) {
 function taskProgress(task) {
   if (!task) return '';
   if (task.phase === 'error') return task.error || '同步失败';
-  if (task.phase === 'success') return task.total ? `已同步 ${task.total} 项` : '已是最新';
+  if (task.phase === 'success') return task.kind === 'collection' && task.total
+    ? `已同步 ${task.current ?? task.total}/${task.total} 张照片`
+    : task.total ? `已同步 ${task.total} 项` : '已是最新';
   if (task.kind === 'mutation') return '正在同步本地修改';
   if (task.action === 'delete') return task.kind === 'logo' ? '正在永久删除 LOGO' : '正在永久删除图片';
   if (task.kind === 'logo') return `正在${task.direction === 'download' ? '下载' : '上传'}第 ${task.current}/${task.total} 个 LOGO`;
@@ -614,10 +621,12 @@ function renderSyncStatus() {
   });
   const collection = activeCollection();
   const collectionTask = collection && syncTasks.get(`collection:${collection.id}`);
+  const visibleCollectionRecords = collection ? (syncPhotoSnapshots.get(collection.id) || (collection.id === activeCollectionId ? photos : [])) : [];
+  const collectionFullySynced = !visibleCollectionRecords.length || visibleCollectionRecords.every(item => item.cloudSyncStatus === 'success');
   el['collection-sync'].classList.toggle('syncing', collectionTask?.phase === 'running');
   el['collection-sync'].classList.toggle('sync-error', collectionTask?.phase === 'error');
-  el['collection-sync'].classList.toggle('synced', collection?.storageMode === 'cloud' && collectionTask?.phase !== 'error');
-  el['collection-sync'].title = collection?.storageMode === 'cloud' ? '同步云端作品集' : '将作品集同步到云端';
+  el['collection-sync'].classList.toggle('synced', collection?.storageMode === 'cloud' && collectionFullySynced && collectionTask?.phase !== 'running' && collectionTask?.phase !== 'error');
+  el['collection-sync'].title = collectionTask?.phase === 'running' ? '查看作品集同步进度' : collection?.storageMode === 'cloud' ? '查看云端同步状态' : '将作品集同步到云端';
   el['collection-share'].hidden = collection?.storageMode !== 'cloud';
   if (!cloudUser) {
     el['sync-status-body'].innerHTML = '<p class="sync-empty">连接云端账户后，可自动同步 LOGO，并手动同步作品集。</p>';
@@ -625,17 +634,31 @@ function renderSyncStatus() {
   }
   const logoTask = syncTasks.get('logos');
   const mutationTask = syncTasks.get('mutations');
+  const detailCollection = collections.find(item => item.id === syncDetailCollectionId && !item.cloudDeleted) || collection;
+  const activeRecords = detailCollection ? (syncPhotoSnapshots.get(detailCollection.id) || (detailCollection.id === activeCollectionId ? photos : [])) : [];
+  const syncedCount = activeRecords.filter(item => item.cloudSyncStatus === 'success').length;
+  const collectionDetail = detailCollection?.storageMode === 'cloud' ? `<section class="collection-sync-detail">
+      <div class="collection-sync-summary"><div><strong>${escapeHtml(detailCollection.name)}</strong><small>${syncedCount}/${activeRecords.length} 张照片已同步</small></div><span>${activeRecords.length ? Math.round(syncedCount / activeRecords.length * 100) : 100}%</span></div>
+      <i style="--sync-progress:${activeRecords.length ? Math.round(syncedCount / activeRecords.length * 100) : 100}%"></i>
+      <label class="collection-auto-sync"><input type="checkbox" data-auto-sync-collection="${escapeHtml(detailCollection.id)}" ${detailCollection.autoSyncNewPhotos !== false ? 'checked' : ''}><span>自动同步新添加的照片</span></label>
+      <div class="collection-photo-progress">${activeRecords.length ? activeRecords.map((item, index) => {
+        const status = item.cloudSyncStatus || 'pending';
+        const label = { success: '已同步', syncing: '上传中', failed: '同步失败', pending: '等待同步' }[status] || '等待同步';
+        return `<div class="collection-photo-sync-row" data-status="${status}"><span>${String(index + 1).padStart(2, '0')}</span><strong>${escapeHtml(item.file?.name || `照片 ${index + 1}`)}</strong><small>${label}</small></div>`;
+      }).join('') : '<p class="sync-empty">这个作品集还没有照片。</p>'}</div>
+    </section>` : '';
   const collectionRows = collections.filter(collection => !collection.cloudDeleted).map(collection => {
     const task = syncTasks.get(`collection:${collection.id}`);
     const runningTask = task?.phase === 'running';
     const status = task ? taskProgress(task) : collection.storageMode === 'cloud' ? '云端作品集' : '等待手动同步';
     return `<section class="sync-row${task?.phase === 'error' ? ' error' : ''}">
       <div><strong>${escapeHtml(collection.name)}</strong><small>${escapeHtml(status)}</small></div>
-      <div class="sync-row-actions"><button type="button" data-sync-collection="${escapeHtml(collection.id)}" ${runningTask ? 'disabled' : ''}>${runningTask ? '同步中' : collection.storageMode === 'cloud' ? '重新同步' : '同步'}</button>${collection.storageMode === 'cloud' ? `<button type="button" data-delete-cloud-collection="${escapeHtml(collection.id)}">删除</button>` : ''}</div>
+      <div class="sync-row-actions"><button type="button" data-sync-collection="${escapeHtml(collection.id)}">${runningTask ? '查看进度' : collection.storageMode === 'cloud' ? '查看' : '同步'}</button>${collection.storageMode === 'cloud' ? `<button type="button" data-delete-cloud-collection="${escapeHtml(collection.id)}">删除</button>` : ''}</div>
       ${runningTask ? `<i style="--sync-progress:${Math.round((task.current / Math.max(1, task.total)) * 100)}%"></i>` : ''}
     </section>`;
   }).join('');
   el['sync-status-body'].innerHTML = `
+    ${collectionDetail}
     ${mutationTask?.phase === 'error' ? `<section class="sync-row error"><div><strong>待同步修改</strong><small>${escapeHtml(taskProgress(mutationTask))}</small></div><button type="button" data-sync-mutations>重试</button></section>` : ''}
     <section class="sync-row sync-logo-row${logoTask?.phase === 'error' ? ' error' : ''}">
       <div><strong>我的 LOGO</strong><small>${escapeHtml(logoTask ? taskProgress(logoTask) : '自动同步')}</small></div>
@@ -704,7 +727,7 @@ function remotePhotoName(asset) {
 }
 
 async function restoreCloudCollections() {
-  if (!cloudUser) return;
+  if (!cloudUser) return [];
   let remoteCollections;
   try {
     remoteCollections = await cloudSyncRepository.listCollections();
@@ -713,7 +736,7 @@ async function restoreCloudCollections() {
     remoteCollections = remoteCollections.filter(item => !pendingCollectionDeletes.has(item.id));
   } catch (error) {
     setSyncTask('collections:restore', { kind: 'collection', direction: 'download', phase: 'error', error: error.message });
-    return;
+    return [];
   }
   const localPhotos = await loadPhotos();
   const localPhotoIds = new Set(localPhotos.map(photo => photo.id));
@@ -841,89 +864,123 @@ async function restoreCloudCollections() {
     geoService = displaySettings.locationService;
     renderCollections();
   }
+  return remoteCollections;
+}
+
+function setPhotoCloudStatus(record, status, updatedAt = record.cloudUpdatedAt) {
+  record.cloudSyncStatus = status;
+  record.cloudUpdatedAt = updatedAt;
+  const visible = photos.find(photo => photo.id === record.id);
+  if (visible && visible !== record) {
+    visible.cloudSyncStatus = status;
+    visible.cloudUpdatedAt = updatedAt;
+  }
+}
+
+async function uploadCollectionRecords(collection, allRecords, pendingRecords) {
+  const key = `collection:${collection.id}`;
+  syncPhotoSnapshots.set(collection.id, allRecords);
+  for (const record of pendingRecords) {
+    setPhotoCloudStatus(record, 'syncing');
+    await savePhoto(record);
+  }
+  let completed = allRecords.filter(record => record.cloudSyncStatus === 'success').length;
+  setSyncTask(key, { kind: 'collection', direction: 'upload', phase: pendingRecords.length ? 'running' : 'success', current: completed, total: allRecords.length });
+  for (const record of pendingRecords) {
+    try {
+      const asset = await cloudSyncRepository.uploadPhoto(collection.cloudId, record);
+      setPhotoCloudStatus(record, 'success', Date.parse(asset.updated_at) || Date.now());
+      await savePhoto(record);
+      completed += 1;
+      setSyncTask(key, { current: completed });
+      if (cloudUser) cloudMutationQueue.remove(cloudUser.id, `photo:${record.id}`);
+    } catch (error) {
+      setPhotoCloudStatus(record, 'failed');
+      await savePhoto(record);
+      setSyncTask(key, { phase: 'error', error: error.message, current: completed, total: allRecords.length });
+      renderPhotoSyncStatus();
+      return false;
+    }
+  }
+  completed = allRecords.filter(record => record.cloudSyncStatus === 'success').length;
+  setSyncTask(key, { phase: 'success', current: completed, total: allRecords.length });
+  renderPhotoSyncStatus();
+  return true;
 }
 
 async function syncCollectionToCloud(collectionId) {
   if (!cloudUser) return;
+  if (collectionSyncPromises.has(collectionId)) return collectionSyncPromises.get(collectionId);
   const collection = collections.find(item => item.id === collectionId);
   if (!collection) return;
-  const key = `collection:${collection.id}`;
-  let activeRecord = null;
-  try {
+  const task = (async () => {
     const records = (await loadPhotos()).filter(photo => photo.collectionId === collection.id);
-    for (const record of records) {
-      record.cloudSyncStatus = 'syncing';
-      await savePhoto(record);
-    }
-    photos.filter(photo => photo.collectionId === collection.id).forEach(photo => { photo.cloudSyncStatus = 'syncing'; });
-    renderPhotoSyncStatus();
-    setSyncTask(key, { kind: 'collection', phase: 'running', current: 0, total: records.length });
+    setSyncTask(`collection:${collection.id}`, { kind: 'collection', direction: 'upload', phase: 'running', current: 0, total: records.length });
     const remote = await cloudSyncRepository.syncCollection(collection);
     collection.cloudId = remote.id;
     collection.cloudOwnerId = cloudUser.id;
     collection.storageMode = 'cloud';
+    collection.autoSyncNewPhotos = collection.autoSyncNewPhotos !== false;
     saveCollections(collections, activeCollectionId);
+    renderSyncStatus();
+    const remoteIds = new Set((remote.photos || []).map(asset => asset.source_id));
+    for (const record of records.filter(item => remoteIds.has(item.id))) {
+      setPhotoCloudStatus(record, 'success', record.cloudUpdatedAt || Date.now());
+      await savePhoto(record);
+    }
+    const pendingRecords = records.filter(record => !remoteIds.has(record.id));
+    for (const record of pendingRecords) {
+      setPhotoCloudStatus(record, 'syncing');
+      await savePhoto(record);
+    }
+    syncPhotoSnapshots.set(collection.id, records);
+    renderSyncStatus();
     const candidates = loadInfoCandidatesFor(collection.id);
     await cloudSyncRepository.syncCandidates(remote.id, candidates);
-    for (let index = 0; index < records.length; index += 1) {
-      setSyncTask(key, { current: index + 1 });
-      const record = records[index];
-      activeRecord = record;
-      await cloudSyncRepository.uploadPhoto(remote.id, record);
-      record.cloudSyncStatus = 'success';
-      record.cloudUpdatedAt = Date.now();
-      await savePhoto(record);
-      const visible = photos.find(photo => photo.id === record.id);
-      if (visible) visible.cloudSyncStatus = 'success';
-      renderPhotoSyncStatus();
-      activeRecord = null;
+    const completed = await uploadCollectionRecords(collection, records, pendingRecords);
+    if (completed) {
+      cloudMutationQueue.remove(cloudUser.id, `collection:${collection.id}`);
+      cloudMutationQueue.remove(cloudUser.id, `candidates:${collection.id}`);
     }
-    cloudMutationQueue.remove(cloudUser.id, `collection:${collection.id}`);
-    cloudMutationQueue.remove(cloudUser.id, `candidates:${collection.id}`);
-    records.forEach(record => cloudMutationQueue.remove(cloudUser.id, `photo:${record.id}`));
-    setSyncTask(key, { phase: 'success', current: records.length, total: records.length });
-  } catch (error) {
-    if (activeRecord) {
-      activeRecord.cloudSyncStatus = 'failed';
-      await savePhoto(activeRecord);
-      const visible = photos.find(photo => photo.id === activeRecord.id);
-      if (visible) visible.cloudSyncStatus = 'failed';
-    }
-    const interrupted = photos.filter(photo => photo.collectionId === collection.id && photo.cloudSyncStatus === 'syncing');
-    await Promise.all(interrupted.map(photo => {
-      photo.cloudSyncStatus = 'failed';
-      return savePhoto(photo);
-    }));
-    renderPhotoSyncStatus();
-    setSyncTask(key, { phase: 'error', error: error.message });
-  }
+  })().catch(error => {
+    setSyncTask(`collection:${collection.id}`, { kind: 'collection', phase: 'error', error: error.message });
+  }).finally(() => collectionSyncPromises.delete(collectionId));
+  collectionSyncPromises.set(collectionId, task);
+  return task;
 }
 
 async function uploadNewPhotosToCloud(collection, items) {
   if (!cloudUser || !collection?.cloudId || !items.length) return;
-  const key = `collection:${collection.id}`;
-  setSyncTask(key, { kind: 'collection', direction: 'upload', phase: 'running', current: 0, total: items.length });
-  for (let index = 0; index < items.length; index += 1) {
-    const item = items[index];
-    try {
-      item.cloudSyncStatus = 'syncing';
-      await savePhoto(item);
-      renderPhotoSyncStatus(item);
-      setSyncTask(key, { current: index + 1 });
-      const asset = await cloudSyncRepository.uploadPhoto(collection.cloudId, item);
-      item.cloudSyncStatus = 'success';
-      item.cloudUpdatedAt = Date.parse(asset.updated_at) || Date.now();
-      await savePhoto(item);
-      renderPhotoSyncStatus(item);
-    } catch (error) {
-      item.cloudSyncStatus = 'failed';
-      await savePhoto(item);
-      renderPhotoSyncStatus(item);
-      setSyncTask(key, { phase: 'error', error: error.message });
-      return;
-    }
+  const running = collectionSyncPromises.get(collection.id);
+  if (running) {
+    await running;
+    return uploadNewPhotosToCloud(collection, items);
   }
-  setSyncTask(key, { phase: 'success', current: items.length, total: items.length });
+  const task = (async () => {
+    const records = (await loadPhotos()).filter(photo => photo.collectionId === collection.id && !photo.cloudDeleted);
+    const ids = new Set(items.map(item => item.id));
+    await uploadCollectionRecords(collection, records, records.filter(record => ids.has(record.id) && record.cloudSyncStatus !== 'success'));
+  })().finally(() => collectionSyncPromises.delete(collection.id));
+  collectionSyncPromises.set(collection.id, task);
+  return task;
+}
+
+async function resumeInterruptedCollectionUploads(remoteCollections = []) {
+  if (!cloudUser) return;
+  const records = await loadPhotos();
+  const remoteByClientId = new Map(remoteCollections.map(collection => [collection.client_id, collection]));
+  for (const collection of collections.filter(item => item.storageMode === 'cloud' && String(item.cloudOwnerId) === String(cloudUser.id))) {
+    const collectionRecords = records.filter(item => item.collectionId === collection.id && !item.cloudDeleted);
+    const interrupted = collectionRecords.filter(item => ['syncing', 'failed'].includes(item.cloudSyncStatus));
+    if (!interrupted.length) continue;
+    const remoteIds = new Set((remoteByClientId.get(collection.id)?.photos || []).map(asset => asset.source_id));
+    for (const record of interrupted.filter(item => remoteIds.has(item.id))) {
+      setPhotoCloudStatus(record, 'success', record.cloudUpdatedAt || Date.now());
+      await savePhoto(record);
+    }
+    const remaining = interrupted.filter(item => !remoteIds.has(item.id));
+    if (remaining.length) uploadNewPhotosToCloud(collection, remaining);
+  }
 }
 
 function closeSyncPanel() {
@@ -932,14 +989,26 @@ function closeSyncPanel() {
   document.querySelectorAll('.global-sync').forEach(button => button.setAttribute('aria-expanded', 'false'));
 }
 
-document.querySelectorAll('.global-sync').forEach(button => button.addEventListener('click', () => {
-  const open = !el['canvas-sync-panel'].classList.contains('open');
-  if (!open) return closeSyncPanel();
+async function refreshCollectionSyncSnapshot(collectionId = activeCollectionId) {
+  const records = (await loadPhotos()).filter(item => item.collectionId === collectionId && !item.cloudDeleted);
+  syncPhotoSnapshots.set(collectionId, records);
+  renderSyncStatus();
+  return records;
+}
+
+function openSyncPanel(collectionId = activeCollectionId) {
+  syncDetailCollectionId = collectionId;
   closeCanvasInfo();
   renderSyncStatus();
   el['canvas-sync-panel'].classList.add('open');
   el['canvas-sync-panel'].setAttribute('aria-hidden', 'false');
   document.querySelectorAll('.global-sync').forEach(target => target.setAttribute('aria-expanded', 'true'));
+  refreshCollectionSyncSnapshot(collectionId);
+}
+
+document.querySelectorAll('.global-sync').forEach(button => button.addEventListener('click', () => {
+  if (el['canvas-sync-panel'].classList.contains('open')) closeSyncPanel();
+  else openSyncPanel();
 }));
 el['canvas-sync-close'].addEventListener('click', closeSyncPanel);
 el['sync-status-body'].addEventListener('click', event => {
@@ -949,6 +1018,19 @@ el['sync-status-body'].addEventListener('click', event => {
   if (deleteButton) openCollectionDeleteConfirmation(deleteButton.dataset.deleteCloudCollection);
   if (event.target.closest('[data-sync-mutations]')) flushCloudMutations();
   if (event.target.closest('[data-sync-logos]')) syncLogos();
+});
+el['sync-status-body'].addEventListener('change', async event => {
+  const checkbox = event.target.closest('[data-auto-sync-collection]');
+  if (!checkbox) return;
+  const collection = collections.find(item => item.id === checkbox.dataset.autoSyncCollection);
+  if (!collection) return;
+  collection.autoSyncNewPhotos = checkbox.checked;
+  saveCollections(collections, activeCollectionId);
+  if (checkbox.checked && cloudUser) {
+    const records = await refreshCollectionSyncSnapshot(collection.id);
+    const pending = records.filter(item => ['pending', 'failed'].includes(item.cloudSyncStatus || 'pending'));
+    if (pending.length) uploadNewPhotosToCloud(collection, pending);
+  }
 });
 
 async function deleteCollection(collectionId) {
@@ -990,9 +1072,10 @@ function requestCollectionSync(collectionId) {
     return;
   }
   if (collection?.storageMode === 'cloud') {
-    syncCollectionToCloud(collection.id);
+    openSyncPanel(collection.id);
     return;
   }
+  closeSyncPanel();
   el['sync-confirm-modal'].dataset.collectionId = collection.id;
   document.querySelector('#sync-confirm-title').textContent = `同步“${collection.name}”？`;
   el['sync-confirm-modal'].classList.add('open');
@@ -1001,7 +1084,12 @@ function requestCollectionSync(collectionId) {
   requestAnimationFrame(() => el['sync-confirm-submit'].focus());
 }
 
-el['collection-sync'].addEventListener('click', () => requestCollectionSync(activeCollectionId));
+el['collection-sync'].addEventListener('click', () => {
+  const collection = activeCollection();
+  const task = collection && syncTasks.get(`collection:${collection.id}`);
+  if (collection?.storageMode === 'cloud' || task?.phase === 'running') openSyncPanel();
+  else requestCollectionSync(activeCollectionId);
+});
 el['photo-sync'].addEventListener('click', () => {
   if (el['photo-sync'].dataset.status !== 'failed') return;
   const item = photos[current];
@@ -1229,9 +1317,10 @@ document.querySelector('.account-auth-form').addEventListener('submit', async ev
     showUserPanel();
     await flushCloudMutations();
     syncLogos();
-    await restoreCloudCollections();
+    const remoteCollections = await restoreCloudCollections();
     await flushCloudMutations();
     await restoreArchive();
+    resumeInterruptedCollectionUploads(remoteCollections);
   } catch (error) {
     showAccountMessage(error.message, true);
   } finally {
@@ -2282,11 +2371,16 @@ async function addFiles(fileList) {
   }
   const existing = new Set(photos.map(item => item.id));
   const fresh = loaded.filter(item => !existing.has(item.id));
+  const collection = activeCollection();
+  if (collection?.storageMode === 'cloud') {
+    fresh.forEach(item => { item.cloudSyncStatus = collection.autoSyncNewPhotos === false ? 'pending' : 'syncing'; });
+  }
   for (const item of loaded.filter(item => existing.has(item.id))) URL.revokeObjectURL(item.url);
   photos.push(...fresh);
   await Promise.all(fresh.map(savePhoto));
+  if (fresh.length) renderSyncStatus();
   if (fresh.length) show(photos.length - fresh.length);
-  if (fresh.length && activeCollection()?.storageMode === 'cloud' && cloudUser) uploadNewPhotosToCloud(activeCollection(), fresh);
+  if (fresh.length && collection?.storageMode === 'cloud' && collection.autoSyncNewPhotos !== false && cloudUser) uploadNewPhotosToCloud(collection, fresh);
 }
 
 function isHeic(file) {
@@ -2564,7 +2658,7 @@ el['collection-form'].addEventListener('submit', async event => {
 document.addEventListener('click', event => {
   if (!event.target.closest('.collection-heading')) closeCollectionMenu();
   if (!event.target.closest('.canvas-info, .canvas-info-panel')) closeCanvasInfo();
-  if (!event.target.closest('.global-sync, .canvas-sync-panel')) closeSyncPanel();
+  if (!event.target.closest('.global-sync, .collection-sync, .canvas-sync-panel')) closeSyncPanel();
 });
 
 function showEmpty() {
@@ -3020,11 +3114,17 @@ renderCollections();
 const assetRestorePromise = restoreCustomAssets();
 Promise.all([assetRestorePromise, cloudRestorePromise]).then(async ([, user]) => {
   renderSyncStatus();
+  let remoteCollections = [];
   if (user) {
     await flushCloudMutations();
-    await Promise.all([syncLogos(), restoreCloudCollections()]);
+    [, remoteCollections] = await Promise.all([syncLogos(), restoreCloudCollections()]);
     await flushCloudMutations();
   }
   await restoreArchive();
+  if (user) resumeInterruptedCollectionUploads(remoteCollections);
 });
-window.addEventListener('online', () => flushCloudMutations());
+window.addEventListener('online', async () => {
+  flushCloudMutations();
+  const remoteCollections = await restoreCloudCollections();
+  resumeInterruptedCollectionUploads(remoteCollections);
+});
