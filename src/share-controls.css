@@ -22,10 +22,23 @@
 .shared-progress .folio-segment { position: relative; overflow: hidden; }
 .shared-controls.playing ~ .shared-progress .folio-segment.active::after { position: absolute; top: calc(50% - .5px); right: 0; left: 0; height: 1px; content: ""; background: var(--ink); transform: scaleX(0); transform-origin: left center; animation: shared-autoplay-progress 5s linear forwards; }
 .shared-cropped { object-fit: cover; object-position: var(--share-crop-x) var(--share-crop-y); }
+.shared-artboard-wrap .photo-stage { background: #e6e2d9; isolation: isolate; }
+.shared-artboard-wrap .photo-stage::after { position: absolute; z-index: 2; top: 50%; left: 50%; width: 1.05rem; height: 1.05rem; border: 1px solid rgb(245 243 237 / 42%); border-top-color: rgb(245 243 237 / 92%); border-radius: 50%; content: ""; opacity: 0; pointer-events: none; transform: translate(-50%, -50%); }
+.shared-artboard-wrap .photo-stage.shared-image-loading::after { opacity: 1; animation: shared-image-loading .85s linear infinite; }
+.shared-artboard-wrap .photo-stage img { transition: filter .7s cubic-bezier(.22,1,.36,1), opacity .35s ease; }
+.shared-artboard-wrap .photo-stage.shared-image-loading:not(.shared-image-thumbnail) img { opacity: 0; }
+.shared-artboard-wrap .photo-stage.shared-image-thumbnail img { filter: blur(12px); opacity: .82; transform: scale(1.025); }
+.shared-artboard-wrap .photo-stage.shared-image-error::after { display: none; }
 .shared-empty { width: 100%; aspect-ratio: 3 / 4; display: grid; place-items: center; background: var(--paper); color: var(--muted); font-size: .65rem; }
 .shared-footer { display: none; }
 @keyframes shared-autoplay-progress { to { transform: scaleX(1); } }
 @keyframes shared-download-pulse { to { opacity: .35; transform: translateY(2px); } }
+@keyframes shared-image-loading { to { transform: translate(-50%, -50%) rotate(1turn); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .shared-artboard-wrap .photo-stage img { transition: none; }
+  .shared-artboard-wrap .photo-stage.shared-image-loading::after { animation-duration: 1.8s; }
+}
 @media (max-width: 860px) {
   html, body, #app { min-height: 100%; overflow: auto; }
   .shared-page { padding: .75rem .75rem 1.25rem; }
