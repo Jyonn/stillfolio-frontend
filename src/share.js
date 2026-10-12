@@ -4,6 +4,7 @@ import './share-controls.css';
 import brandLogoUrl from './assets/stillfolio-logo.svg?url';
 import { createReadonlyCanvas } from './readonly-canvas.js';
 import { toBlob } from 'html-to-image';
+import { apiUrl } from './api-origin.js';
 
 const app = document.querySelector('#app');
 const SHARE_IMAGE_CACHE = 'stillfolio-share-images-v1';
@@ -22,7 +23,7 @@ function photoRecord(asset) {
 }
 
 function sharedImageRequest(photo, variant) {
-  const url = new URL(photo.content_url, window.location.origin);
+  const url = new URL(apiUrl(photo.content_url), window.location.origin);
   url.searchParams.set('v', photo.updated_at || photo.id);
   if (variant === 'thumbnail') url.searchParams.set('thumbnail', '1');
   return url.href;
@@ -97,7 +98,7 @@ export async function renderSharedCollection(token) {
   document.title = '共享作品集 · 留幅 STILLFOLIO';
   app.innerHTML = `<main class="shared-loading"><img src="${brandLogoUrl}" alt="留幅 STILLFOLIO"><p>正在打开作品集…</p></main>`;
   try {
-    const response = await fetch(`/api/v1/sync/share/${encodeURIComponent(token)}`);
+    const response = await fetch(apiUrl(`/api/v1/sync/share/${encodeURIComponent(token)}`));
     const collection = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(collection.detail || '无法打开这个作品集');
     const photos = (Array.isArray(collection.photos) ? collection.photos : []).map(photoRecord);

@@ -1,3 +1,5 @@
+import { apiUrl } from '../api-origin.js';
+
 class CloudAccountRepository {
   accessToken = '';
   user = null;
@@ -6,7 +8,7 @@ class CloudAccountRepository {
     const headers = { ...(options.headers || {}) };
     if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
     if (this.accessToken) headers.Authorization = `Bearer ${this.accessToken}`;
-    const response = await fetch(`/api/v1${path}`, { credentials: 'include', ...options, headers });
+    const response = await fetch(apiUrl(`/api/v1${path}`), { credentials: 'include', ...options, headers });
     const data = options.raw ? await response.blob() : response.status === 204 ? null : await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data?.detail || '云端服务请求失败');
     return data;
