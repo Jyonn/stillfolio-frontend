@@ -1463,8 +1463,21 @@ button { color: inherit; }
 .onboarding-avatar.active { border-color: var(--ink); outline: 2px solid #f2efe7; outline-offset: -4px; opacity: 1; }
 .onboarding-avatar-grid.needs-selection { outline: 1px solid #8b5a51; outline-offset: .5rem; }
 .onboarding-next,
-.onboarding-actions button { border: 1px solid var(--ink); padding: .78rem 1.25rem; font-family: inherit; font-size: .63rem; cursor: pointer; }
-.onboarding-next { display: block; margin: 2rem 0 0 auto; background: var(--ink); color: var(--paper); }
+.onboarding-actions button,
+.onboarding-entry-actions button,
+.onboarding-cloud-submit { border: 1px solid var(--ink); padding: .78rem 1.25rem; font-family: inherit; font-size: .63rem; cursor: pointer; }
+.onboarding-entry-actions { display: flex; align-items: center; justify-content: flex-end; gap: .55rem; margin-top: 2rem; }
+.onboarding-next { background: var(--ink); color: var(--paper); }
+.onboarding-cloud-entry { background: transparent; color: var(--ink); }
+.onboarding-cloud-back { border: 0; padding: 0; background: transparent; color: #777168; font: inherit; font-size: .58rem; cursor: pointer; }
+.onboarding-code-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .8rem; }
+.onboarding-step label > .onboarding-code-row { margin-bottom: 0; }
+.onboarding-code-row button { min-width: 6.4rem; border: 1px solid var(--line); padding: .7rem .8rem; background: transparent; color: var(--ink); font-family: inherit; font-size: .57rem; cursor: pointer; }
+.onboarding-code-row button:disabled { cursor: wait; opacity: .55; }
+.onboarding-cloud-note { margin: 1rem 0 0; color: #6c7867; font-size: .58rem; }
+.onboarding-cloud-note.error { color: #8b4d43; }
+.onboarding-cloud-submit { display: block; margin: 2rem 0 0 auto; background: var(--ink); color: var(--paper); }
+.onboarding-cloud-submit:disabled { cursor: wait; opacity: .55; }
 .onboarding-help { display: inline-block; margin-top: .55rem; color: #777168; font-size: .56rem; text-underline-offset: .2rem; }
 .onboarding-actions { display: flex; justify-content: flex-end; gap: .55rem; margin-top: 2.2rem; }
 .onboarding-skip { background: transparent; color: var(--ink); }
@@ -1475,4 +1488,6 @@ button { color: inherit; }
   .onboarding-card { min-height: 100dvh; max-height: 100dvh; border: 0; padding: 1.35rem 1.25rem 2rem; box-shadow: none; }
   .onboarding-avatar-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .onboarding-step { padding-top: 2.4rem; }
+  .onboarding-entry-actions { align-items: stretch; flex-direction: column-reverse; }
+  .onboarding-entry-actions button { width: 100%; }
 }

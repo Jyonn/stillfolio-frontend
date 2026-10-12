@@ -160,10 +160,20 @@ app.innerHTML = `
       <form class="onboarding-step onboarding-profile-step">
         <p class="eyebrow">Before the first frame</p>
         <h1 id="onboarding-title">先留下你的名字</h1>
-        <p class="onboarding-lead">昵称与头像只保存在当前浏览器，注册时可以继续沿用。</p>
+        <p class="onboarding-lead">可以先建立当前设备上的身份，已有云端账户也可以直接登录。</p>
         <label class="onboarding-name"><span>昵称</span><input class="onboarding-nickname" maxlength="24" autocomplete="nickname" placeholder="如何称呼你" required></label>
         <div class="onboarding-avatar-grid" role="radiogroup" aria-label="选择头像"></div>
-        <button class="onboarding-next" type="submit">继续</button>
+        <div class="onboarding-entry-actions"><button class="onboarding-cloud-entry" type="button">登录云端用户</button><button class="onboarding-next" type="submit">创建本地用户</button></div>
+      </form>
+      <form class="onboarding-step onboarding-cloud-step" hidden>
+        <button class="onboarding-cloud-back" type="button">← 返回</button>
+        <p class="eyebrow">Cloud account</p>
+        <h1>登录云端用户</h1>
+        <p class="onboarding-lead">使用手机号验证码登录，作品集与我的 LOGO 会在登录后恢复。</p>
+        <label><span>手机号</span><input class="onboarding-cloud-phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="请输入中国大陆手机号" maxlength="13" required></label>
+        <label><span>验证码</span><span class="onboarding-code-row"><input class="onboarding-cloud-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码" maxlength="6" required><button class="onboarding-cloud-send" type="button">获取验证码</button></span></label>
+        <p class="onboarding-cloud-note" hidden></p>
+        <button class="onboarding-cloud-submit" type="submit">登录并进入</button>
       </form>
       <form class="onboarding-step onboarding-geo-step" hidden>
         <p class="eyebrow">Location service</p>
@@ -1168,6 +1178,7 @@ const onboarding = document.querySelector('.onboarding');
 const onboardingCard = document.querySelector('.onboarding-card');
 const onboardingProfileStep = document.querySelector('.onboarding-profile-step');
 const onboardingGeoStep = document.querySelector('.onboarding-geo-step');
+const onboardingCloudStep = document.querySelector('.onboarding-cloud-step');
 const onboardingAvatarGrid = document.querySelector('.onboarding-avatar-grid');
 const onboardingNickname = document.querySelector('.onboarding-nickname');
 const onboardingAmapKey = document.querySelector('.onboarding-amap-key');
@@ -1183,6 +1194,19 @@ function applyLocalProfile(profile) {
     localStorage.setItem('custom-avatar-enabled', 'false');
     renderAvatars();
   }
+}
+
+function persistCloudProfile(user) {
+  if (!user) return null;
+  const avatarType = user.avatar_type === 'custom' ? 'custom' : 'sprite';
+  const fallbackAvatar = avatarType === 'sprite' ? avatarIndex : '';
+  const profile = localRepositories.profile.save({
+    nickname: user.nickname || 'StillFolio 用户',
+    avatarType,
+    avatarValue: user.avatar_value || fallbackAvatar,
+  });
+  applyLocalProfile(profile);
+  return profile;
 }
 
 function closeOnboarding() {
@@ -1211,6 +1235,22 @@ function openOnboarding() {
   requestAnimationFrame(() => onboardingNickname.focus());
 }
 
+function showOnboardingStep(step) {
+  onboardingProfileStep.hidden = step !== 'profile';
+  onboardingGeoStep.hidden = step !== 'geo';
+  onboardingCloudStep.hidden = step !== 'cloud';
+  onboardingCard.querySelector('.onboarding-brand span').textContent = step === 'profile' ? '01 / 02' : step === 'geo' ? '02 / 02' : 'CLOUD';
+}
+
+document.querySelector('.onboarding-cloud-entry').addEventListener('click', () => {
+  showOnboardingStep('cloud');
+  requestAnimationFrame(() => document.querySelector('.onboarding-cloud-phone').focus());
+});
+document.querySelector('.onboarding-cloud-back').addEventListener('click', () => {
+  showOnboardingStep('profile');
+  requestAnimationFrame(() => onboardingNickname.focus());
+});
+
 onboardingAvatarGrid.addEventListener('click', event => {
   const choice = event.target.closest('[data-onboarding-avatar]');
   if (!choice) return;
@@ -1232,9 +1272,7 @@ onboardingProfileStep.addEventListener('submit', event => {
   }
   const profile = localRepositories.profile.save({ nickname, avatarType: 'sprite', avatarValue: onboardingAvatar });
   applyLocalProfile(profile);
-  onboardingProfileStep.hidden = true;
-  onboardingGeoStep.hidden = false;
-  onboardingCard.querySelector('.onboarding-brand span').textContent = '02 / 02';
+  showOnboardingStep('geo');
   onboardingAmapKey.focus();
 });
 
@@ -1243,6 +1281,36 @@ onboardingGeoStep.addEventListener('submit', event => {
   completeOnboarding();
 });
 document.querySelector('.onboarding-skip').addEventListener('click', completeOnboarding);
+
+document.querySelector('.onboarding-cloud-send').addEventListener('click', async event => {
+  await sendCloudVerificationCode({
+    button: event.currentTarget,
+    phoneInput: document.querySelector('.onboarding-cloud-phone'),
+    codeInput: document.querySelector('.onboarding-cloud-code'),
+    note: document.querySelector('.onboarding-cloud-note'),
+    scene: 'login',
+  });
+});
+
+onboardingCloudStep.addEventListener('submit', async event => {
+  event.preventDefault();
+  const submit = document.querySelector('.onboarding-cloud-submit');
+  const note = document.querySelector('.onboarding-cloud-note');
+  submit.disabled = true;
+  try {
+    await cloudRestorePromise;
+    const user = await cloudAccountRepository.verify({
+      phone: document.querySelector('.onboarding-cloud-phone').value.trim(),
+      code: document.querySelector('.onboarding-cloud-code').value.trim(),
+      scene: 'login',
+    });
+    await completeCloudConnection(user, { finishOnboarding: true });
+  } catch (error) {
+    showAuthMessage(note, error.message, true);
+  } finally {
+    submit.disabled = false;
+  }
+});
 
 if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('reset-onboarding')) {
   localRepositories.profile.clear();
@@ -1254,6 +1322,10 @@ else openOnboarding();
 
 const cloudRestorePromise = cloudAccountRepository.restore().then(user => {
   cloudUser = user;
+  if (user && !localRepositories.profile.load()) {
+    persistCloudProfile(user);
+    closeOnboarding();
+  }
   renderUserIdentity();
   renderSyncStatus();
   return user;
@@ -1278,20 +1350,27 @@ document.querySelector('.user-settings').addEventListener('click', event => {
 
 function showAccountMessage(message, isError = false) {
   const note = document.querySelector('.account-service-note');
+  showAuthMessage(note, message, isError);
+}
+
+function showAuthMessage(note, message, isError = false) {
   note.textContent = message;
   note.classList.toggle('error', isError);
   note.hidden = false;
 }
 
-document.querySelector('.account-send-code').addEventListener('click', async event => {
-  const button = event.currentTarget;
-  const phone = document.querySelector('.account-phone').value.trim();
-  if (!phone) return showAccountMessage('请先输入手机号', true);
+async function sendCloudVerificationCode({ button, phoneInput, codeInput, note, scene }) {
+  const phone = phoneInput.value.trim();
+  if (!phone) {
+    showAuthMessage(note, '请先输入手机号', true);
+    phoneInput.focus();
+    return;
+  }
   button.disabled = true;
   try {
-    const data = await cloudAccountRepository.sendCode(phone, 'register');
-    if (data.debug_code) document.querySelector('.account-code').value = data.debug_code;
-    showAccountMessage(data.debug_code ? '开发模式验证码已自动填入' : '验证码已发送，请查看短信');
+    const data = await cloudAccountRepository.sendCode(phone, scene);
+    if (data.debug_code) codeInput.value = data.debug_code;
+    showAuthMessage(note, data.debug_code ? '开发模式验证码已自动填入' : '验证码已发送，请查看短信');
     let remaining = Number(data.retry_after || 60);
     clearInterval(codeCooldownTimer);
     button.textContent = `${remaining}s 后重试`;
@@ -1305,8 +1384,32 @@ document.querySelector('.account-send-code').addEventListener('click', async eve
     }, 1000);
   } catch (error) {
     button.disabled = false;
-    showAccountMessage(error.message, true);
+    showAuthMessage(note, error.message, true);
   }
+}
+
+async function completeCloudConnection(user, { finishOnboarding = false } = {}) {
+  cloudUser = user;
+  persistCloudProfile(user);
+  renderUserIdentity();
+  if (finishOnboarding) closeOnboarding();
+  else showUserPanel();
+  await flushCloudMutations();
+  syncLogos();
+  const remoteCollections = await restoreCloudCollections();
+  await flushCloudMutations();
+  await restoreArchive();
+  resumeInterruptedCollectionUploads(remoteCollections);
+}
+
+document.querySelector('.account-send-code').addEventListener('click', async event => {
+  await sendCloudVerificationCode({
+    button: event.currentTarget,
+    phoneInput: document.querySelector('.account-phone'),
+    codeInput: document.querySelector('.account-code'),
+    note: document.querySelector('.account-service-note'),
+    scene: 'register',
+  });
 });
 
 document.querySelector('.account-auth-form').addEventListener('submit', async event => {
@@ -1314,20 +1417,13 @@ document.querySelector('.account-auth-form').addEventListener('submit', async ev
   const submit = el['user-done'];
   submit.disabled = true;
   try {
-    cloudUser = await cloudAccountRepository.verify({
+    const user = await cloudAccountRepository.verify({
       phone: document.querySelector('.account-phone').value.trim(),
       code: document.querySelector('.account-code').value.trim(),
       scene: 'register',
       profile: localRepositories.profile.load(),
     });
-    renderUserIdentity();
-    showUserPanel();
-    await flushCloudMutations();
-    syncLogos();
-    const remoteCollections = await restoreCloudCollections();
-    await flushCloudMutations();
-    await restoreArchive();
-    resumeInterruptedCollectionUploads(remoteCollections);
+    await completeCloudConnection(user);
   } catch (error) {
     showAccountMessage(error.message, true);
   } finally {
