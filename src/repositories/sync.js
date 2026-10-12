@@ -28,14 +28,14 @@ class CloudSyncRepository {
   syncCollection(collection) {
     return cloudAccountRepository.request('/sync/collections', {
       method: 'POST',
-      body: JSON.stringify({ client_id: collection.id, name: collection.name, description: collection.description || '', display_settings: collection.settings }),
+      body: JSON.stringify({ client_id: collection.id, name: collection.name, description: collection.description || '', display_settings: collection.settings, photo_order: collection.photoOrder || [], photo_colors: collection.photoColors || {} }),
     });
   }
 
   updateCollection(collection) {
     return cloudAccountRepository.request(`/sync/collections/${collection.cloudId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ name: collection.name, description: collection.description || '', display_settings: collection.settings }),
+      body: JSON.stringify({ name: collection.name, description: collection.description || '', display_settings: collection.settings, photo_order: collection.photoOrder || [], photo_colors: collection.photoColors || {} }),
     });
   }
 

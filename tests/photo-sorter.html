@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>排序交互测试</title>
+<body>
+  <button id="open">打开排序测试</button><output id="saved"></output>
+  <script type="module">
+    import '../src/style.css';
+    import {createPhotoSorter} from '../src/photo-sorter.js';
+    const photos = Array.from({length: 16}, (_, i) => ({
+      id: `photo-${i + 1}`, file: {name: `测试照片 ${i + 1}`},
+      url: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="160" height="200"><rect width="160" height="200" fill="hsl(${i * 23},45%,65%)"/><text x="80" y="110" text-anchor="middle" font-size="48">${i + 1}</text></svg>`)}`,
+      exif: {takenAt: `2026:10:${String(16 - i).padStart(2, '0')} 12:00:00`, latitude: 30 + i, longitude: 120 - i},
+    }));
+    const collection = {id: 'test', name: '交互测试（不保存真实数据）'};
+    createPhotoSorter({trigger: document.querySelector('#open'), getPhotos: () => photos, getCollection: () => collection,
+      commit: (order, colors) => { document.querySelector('#saved').textContent = JSON.stringify({order, colors}); },
+    });
+  </script>
+</body>
+</html>

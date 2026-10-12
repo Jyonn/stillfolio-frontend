@@ -8,6 +8,7 @@ import { apiUrl } from './api-origin.js';
 import { PageFlip } from 'page-flip';
 import { prepareShareQr } from './logo-display.js';
 import './share-album.css';
+import {applyPhotoOrder} from './photo-order.js';
 
 const app = document.querySelector('#app');
 const SHARE_IMAGE_CACHE = 'stillfolio-share-images-v1';
@@ -104,7 +105,7 @@ export async function renderSharedCollection(token) {
     const response = await fetch(apiUrl(`/api/v1/sync/share/${encodeURIComponent(token)}`));
     const collection = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(collection.detail || '无法打开这个作品集');
-    const photos = (Array.isArray(collection.photos) ? collection.photos : []).map(photoRecord);
+    const photos = applyPhotoOrder(Array.isArray(collection.photos) ? collection.photos : [], collection.photo_order, asset => asset.source_id).map(photoRecord);
     const customLogoUrl = await sharedLogoUrl(collection.custom_logo).catch(() => '');
     const qrUrl = collection.display_settings?.logoShareQr ? await prepareShareQr(`/share/${token}`) : '';
     const owner = collection.owner;

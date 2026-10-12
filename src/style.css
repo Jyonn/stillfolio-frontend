@@ -704,6 +704,8 @@ button, a, [role="button"] { touch-action: manipulation; }
   transition: transform .2s var(--ease), background .2s ease;
 }
 .icon-button:hover { transform: translateY(-2px); }
+.icon-button:disabled { opacity: .35; cursor: default; }
+.icon-button:disabled:hover { transform: none; }
 .secondary-icon { border-color: var(--line); background: transparent; color: var(--ink); }
 .collection-sync { position: relative; }
 .collection-sync .collection-sync-state { position: absolute; right: .22rem; bottom: .2rem; width: .62rem; height: .62rem; }
@@ -1294,7 +1296,7 @@ button, a, [role="button"] { touch-action: manipulation; }
     z-index: 7;
     top: .42rem;
     right: 2rem;
-    width: 18.2rem;
+    width: 20.5rem;
     margin: 0;
   }
   .canvas-delete { top: 3.45rem; }
@@ -1478,7 +1480,10 @@ button, a, [role="button"] { touch-action: manipulation; }
   .crop-mode-control.expanded { background: var(--ink); }
   .panel { position: static; width: min(100%, 42rem); align-self: start; margin: 0 auto; padding: 0; }
   .panel .collection-heading { display: none; }
-  .panel .actions { margin: .8rem 0 0; }
+  .panel .actions { margin: .8rem 0 0; gap: .45rem; }
+  .panel .actions > .icon-button { flex: 1 1 0; min-width: 44px; }
+  .panel .actions .export-split { flex: 1 1 0; min-width: 44px; }
+  .panel .actions .export-run { width: 100%; }
   .export-menu {
     top: auto;
     bottom: calc(100% + .45rem);

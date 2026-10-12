@@ -8,6 +8,8 @@ import { cloudSyncRepository } from './repositories/sync.js';
 import { cloudMutationQueue } from './repositories/sync-queue.js';
 import { applyCropVariables, applyInlineCrop, clearCropVariables, cropLayout, needsCrop, normalizeCrop } from './crop-layout.js';
 import { createWindowedCarousel } from './carousel.js';
+import { createPhotoSorter } from './photo-sorter.js';
+import { applyPhotoOrder } from './photo-order.js';
 import { cloneDisplaySettings, DEFAULT_DISPLAY_SETTINGS, PROPERTY_LABELS, SLOT_KEYS, slotData } from './display-settings.js';
 import brandLogoUrl from './assets/stillfolio-logo.svg?url';
 import QRCode from 'qrcode';
@@ -157,6 +159,9 @@ app.innerHTML = `
         </button>
         <button class="customize icon-button secondary-icon" type="button" aria-label="自定义展示" title="自定义展示">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2m4 0h10M14 4v6M10 14v6"/></svg>
+        </button>
+        <button class="collection-sort icon-button secondary-icon" type="button" aria-label="照片排序" title="照片排序" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h5v5H4zM15 4h5v5h-5zM4 15h5v5H4zM15 15h5v5h-5zM11 6h2m-1-1 1 1-1 1M13 18h-2m1-1-1 1 1 1"/></svg>
         </button>
         <button class="collection-sync icon-button secondary-icon" type="button" aria-label="同步当前作品集" title="同步当前作品集" aria-expanded="false">
           <svg class="collection-sync-cloud" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 18h10.1a4.2 4.2 0 0 0 .7-8.3A6.1 6.1 0 0 0 6.5 8.2 4.9 4.9 0 0 0 7.2 18Z"/><path class="collection-sync-upload" d="m9 13 3-3 3 3M12 10v6"/></svg>
@@ -455,9 +460,8 @@ async function renderCollectionCovers(orderedCollections) {
     const records = await loadPhotos();
     for (const collection of orderedCollections) {
       if (revision !== collectionCoverRevision) return;
-      const firstPhoto = records
-        .filter(record => record.collectionId === collection.id && !record.cloudDeleted)
-        .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0))[0];
+      const firstPhoto = applyPhotoOrder(records
+        .filter(record => record.collectionId === collection.id && !record.cloudDeleted), collection.photoOrder)[0];
       if (!firstPhoto) continue;
       let preview;
       try {
@@ -886,6 +890,8 @@ async function restoreCloudCollections() {
     if (!hasPendingCollectionUpdate) {
       collection.name = remote.name;
       collection.description = remote.description || '';
+      collection.photoOrder = Array.isArray(remote.photo_order) ? remote.photo_order : [];
+      collection.photoColors = remote.photo_colors || {};
       collection.settings = cloneDisplaySettings(remote.display_settings || DEFAULT_DISPLAY_SETTINGS);
     }
     collection.cloudId = remote.id;
@@ -2740,6 +2746,7 @@ function renderFolioNav() {
 
 function show(index, { deferRender = false } = {}) {
   if (!photos.length) return;
+  document.querySelector('.collection-sort').disabled = false;
   resetDeleteConfirmation();
   const switchToken = ++photoSwitchToken;
   current = (index + photos.length) % photos.length;
@@ -2931,6 +2938,7 @@ el['crop-mode-control'].addEventListener('click', async () => {
   }
 });
 document.addEventListener('keydown', event => {
+  if (photoSorter.isOpen()) return;
   if (el['display-modal'].classList.contains('open') || el['user-modal'].classList.contains('open') || el['info-modal'].classList.contains('open')) return;
   if (!photos.length || !['ArrowRight', 'ArrowLeft'].includes(event.key)) return;
   const target = event.target;
@@ -3138,6 +3146,7 @@ document.addEventListener('click', event => {
 });
 
 function showEmpty() {
+  document.querySelector('.collection-sort').disabled = true;
   el.photo.removeAttribute('src');
   el.photo.classList.remove('ready', 'crop-pan', 'dragging', 'switching');
   el.photo.parentElement.classList.remove('expanded');
@@ -3548,7 +3557,7 @@ async function restoreArchive() {
   try {
     const records = await loadPhotos();
     if (revision !== archiveLoadRevision || collectionId !== activeCollectionId) return;
-    const activeRecords = records.filter(record => record.collectionId === collectionId && !record.cloudDeleted);
+    const activeRecords = applyPhotoOrder(records.filter(record => record.collectionId === collectionId && !record.cloudDeleted), activeCollection().photoOrder);
     const restored = [];
     for (const record of activeRecords) {
       let preview;
@@ -3592,6 +3601,28 @@ async function restoreCustomAssets() {
     console.warn('无法恢复自定义素材', error);
   }
 }
+
+const photoSorter = createPhotoSorter({
+  trigger: document.querySelector('.collection-sort'),
+  getPhotos: () => photos,
+  getCollection: activeCollection,
+  commit: (order, colors, collectionId) => {
+    const collection = activeCollection();
+    if (collection?.id !== collectionId) throw new Error('作品集已切换，请重新打开排序');
+    const selectedId = photos[current]?.id;
+    const previousOrder = collection.photoOrder, previousColors = collection.photoColors;
+    collection.photoOrder = order;
+    collection.photoColors = colors;
+    try { saveCollections(collections, activeCollectionId); }
+    catch (error) { collection.photoOrder = previousOrder; collection.photoColors = previousColors; throw error; }
+    photos = applyPhotoOrder(photos, order);
+    current = Math.max(0, photos.findIndex(photo => photo.id === selectedId));
+    carousel.reset();
+    show(current);
+    renderCollections();
+    queueCloudMutation(`collection:${collection.id}`, 'collection-metadata', {collectionId: collection.id}, collection);
+  },
+});
 
 renderCollections();
 const assetRestorePromise = restoreCustomAssets();
