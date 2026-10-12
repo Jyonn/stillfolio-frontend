@@ -1,3 +1,4 @@
+import './style.css';
 import './share.css';
 import './share-controls.css';
 import brandLogoUrl from './assets/stillfolio-logo.svg?url';
@@ -40,16 +41,18 @@ export async function renderSharedCollection(token) {
     const photos = (Array.isArray(collection.photos) ? collection.photos : []).map(photoRecord);
     let current = 0;
     document.title = `${collection.name} · 留幅 STILLFOLIO`;
-    app.innerHTML = `<main class="shared-page"><header class="shared-header"><a href="/" aria-label="留幅 STILLFOLIO"><img src="${brandLogoUrl}" alt="留幅 STILLFOLIO"></a><div><strong>${escapeHtml(collection.name)}</strong><small>${photos.length} PHOTOGRAPHS</small></div></header><section class="shared-workspace"><div class="shared-canvas-host"></div><nav class="shared-controls playing" aria-label="作品集浏览"><button class="shared-previous" type="button" aria-label="上一张"><svg viewBox="0 0 24 24"><path d="m14.5 5-7 7 7 7"/></svg></button><div class="shared-progress" role="tablist"></div><button class="shared-next" type="button" aria-label="下一张"><svg viewBox="0 0 24 24"><path d="m9.5 5 7 7-7 7"/></svg></button><button class="shared-autoplay" type="button" aria-label="暂停自动轮播" aria-pressed="true"><svg class="pause-icon" viewBox="0 0 24 24"><path d="M9 7v10M15 7v10"/></svg><svg class="play-icon" viewBox="0 0 24 24"><path d="m9 7 8 5-8 5z"/></svg></button><button class="shared-download" type="button" aria-label="下载当前画布"><svg viewBox="0 0 24 24"><path d="M12 4v12m0 0 4.5-4.5M12 16l-4.5-4.5M5 20h14"/></svg><span>下载当前画布</span></button></nav></section><footer class="shared-footer"><span>只读作品集</span><span>照片由留幅呈现</span></footer></main>`;
+    app.innerHTML = `<main class="shared-page"><header class="workspace-heading shared-header"><a href="/" aria-label="留幅 STILLFOLIO"><img src="${brandLogoUrl}" alt="留幅 STILLFOLIO"></a><div class="workspace-title-row"><h1>${escapeHtml(collection.name)}</h1><small>${photos.length} PHOTOGRAPHS · 只读</small></div></header><section class="artboard-wrap shared-artboard-wrap canvas-locked" aria-label="共享作品集画布"><div class="carousel-viewport"><div class="carousel-track"><div class="carousel-slide active-slide"><div class="artboard-frame"><div class="shared-canvas-host"></div></div></div></div></div><nav class="shared-canvas-tools shared-controls playing" aria-label="画布操作"><button class="shared-autoplay" type="button" aria-label="暂停自动轮播" aria-pressed="true"><svg class="pause-icon" viewBox="0 0 24 24"><path d="M9 7v10M15 7v10"/></svg><svg class="play-icon" viewBox="0 0 24 24"><path d="m9 7 8 5-8 5z"/></svg></button><button class="shared-download" type="button" aria-label="下载当前画布"><svg viewBox="0 0 24 24"><path d="M12 4v12m0 0 4.5-4.5M12 16l-4.5-4.5M5 20h14"/></svg><span>下载当前画布</span></button></nav><nav class="folio-nav shared-progress" role="tablist" aria-label="照片切换"></nav></section><footer class="shared-footer"><span>留幅 STILLFOLIO</span><span>只读作品集</span></footer></main>`;
     const host = app.querySelector('.shared-canvas-host');
     const progress = app.querySelector('.shared-progress');
-    const previous = app.querySelector('.shared-previous');
-    const next = app.querySelector('.shared-next');
     const download = app.querySelector('.shared-download');
     const autoplay = app.querySelector('.shared-autoplay');
     const controls = app.querySelector('.shared-controls');
+    const viewport = app.querySelector('.carousel-viewport');
     let playing = photos.length > 1;
     let timer = 0;
+    controls.classList.toggle('playing', playing);
+    autoplay.setAttribute('aria-pressed', String(playing));
+    autoplay.setAttribute('aria-label', playing ? '暂停自动轮播' : '自动轮播');
     const schedule = () => {
       clearTimeout(timer);
       if (!playing || photos.length < 2 || document.hidden) return;
@@ -58,18 +61,27 @@ export async function renderSharedCollection(token) {
     const render = () => {
       if (!photos.length) {
         host.innerHTML = '<div class="shared-empty">这个作品集还没有照片。</div>';
-        previous.disabled = next.disabled = download.disabled = true;
+        download.disabled = true;
         return;
       }
       host.innerHTML = createReadonlyCanvas(photos[current], current, photos.length, collection.display_settings);
-      progress.innerHTML = photos.map((_, index) => `<button type="button" role="tab" data-index="${index}" aria-selected="${index === current}" class="${index === current ? 'active' : ''}" aria-label="第 ${index + 1} 张"></button>`).join('');
-      previous.disabled = current === 0;
-      next.disabled = current === photos.length - 1;
+      progress.innerHTML = photos.map((_, index) => `<button type="button" role="tab" data-index="${index}" aria-selected="${index === current}" class="folio-segment${index === current ? ' active' : ''}" aria-label="第 ${index + 1} 张"></button>`).join('');
       schedule();
     };
-    previous.addEventListener('click', () => { if (current > 0) { current -= 1; render(); } });
-    next.addEventListener('click', () => { if (current < photos.length - 1) { current += 1; render(); } });
     progress.addEventListener('click', event => { const target = event.target.closest('[data-index]'); if (target) { current = Number(target.dataset.index); render(); } });
+    let swipeStartX = null;
+    viewport.addEventListener('pointerdown', event => { swipeStartX = event.clientX; });
+    viewport.addEventListener('pointerup', event => {
+      if (swipeStartX == null) return;
+      const distance = event.clientX - swipeStartX;
+      swipeStartX = null;
+      if (Math.abs(distance) < 42) return;
+      if (distance < 0 && current < photos.length - 1) current += 1;
+      else if (distance > 0 && current > 0) current -= 1;
+      else return;
+      render();
+    });
+    viewport.addEventListener('pointercancel', () => { swipeStartX = null; });
     autoplay.addEventListener('click', () => {
       playing = !playing;
       controls.classList.toggle('playing', playing);
@@ -79,13 +91,13 @@ export async function renderSharedCollection(token) {
     });
     autoplay.disabled = photos.length < 2;
     download.addEventListener('click', async () => {
-      const artboard = host.querySelector('.readonly-artboard');
+      const artboard = host.querySelector('.artboard');
       if (!artboard || download.disabled) return;
       download.disabled = true;
       download.classList.add('busy');
       try {
         await document.fonts?.ready;
-        const image = artboard.querySelector('.readonly-photo-stage img');
+        const image = artboard.querySelector('.photo-stage img');
         if (image && !image.complete) await new Promise((resolve, reject) => { image.addEventListener('load', resolve, { once: true }); image.addEventListener('error', reject, { once: true }); });
         const blob = await toBlob(artboard, { backgroundColor: '#f5f3ed', pixelRatio: 2160 / Math.max(1, artboard.getBoundingClientRect().width), cacheBust: true });
         if (!blob) throw new Error('画布导出失败');
@@ -101,7 +113,10 @@ export async function renderSharedCollection(token) {
       }
     });
     document.addEventListener('visibilitychange', schedule);
-    document.addEventListener('keydown', event => { if (event.key === 'ArrowLeft') previous.click(); if (event.key === 'ArrowRight') next.click(); });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'ArrowLeft' && current > 0) { current -= 1; render(); }
+      if (event.key === 'ArrowRight' && current < photos.length - 1) { current += 1; render(); }
+    });
     render();
   } catch (error) {
     app.innerHTML = `<main class="shared-error"><img src="${brandLogoUrl}" alt="留幅 STILLFOLIO"><p>无法打开作品集</p><small>${escapeHtml(error.message)}</small><a href="/">返回留幅</a></main>`;

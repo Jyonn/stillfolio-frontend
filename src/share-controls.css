@@ -1,56 +1,44 @@
-.shared-progress button {
-  position: relative;
-  overflow: hidden;
+/* The shared view deliberately reuses the portfolio detail canvas classes. */
+.shared-page { min-height: 100dvh; background: #dedbd3; }
+.shared-header { position: fixed; z-index: 10; top: 0; right: 0; left: 0; height: 3.6rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgb(32 31 27 / 10%); padding: 0 2rem; background: rgb(222 219 211 / 94%); }
+.shared-header > a { width: 7.7rem; line-height: 0; }
+.shared-header > a img { width: 100%; height: 2.8rem; object-fit: contain; object-position: left center; }
+.shared-header .workspace-title-row { display: flex; align-items: baseline; gap: .8rem; }
+.shared-header h1 { margin: 0; font-family: "Noto Serif SC", serif; font-size: .9rem; font-weight: 500; }
+.shared-header small { color: #918b82; font-size: .48rem; letter-spacing: .14em; }
+.shared-artboard-wrap { width: min(calc(100% - 7rem), calc((100dvh - 6.8rem) * .75)); min-height: 100dvh; align-content: center; padding-top: 3.6rem; }
+.shared-canvas-host { width: 100%; }
+.shared-canvas-tools { position: absolute; z-index: 7; top: calc(50% - min(50vw, (100dvh - 6.8rem) * .375) + 3.6rem); left: calc(100% + .65rem); display: grid; grid-template-columns: 2rem; gap: .55rem; }
+.shared-controls > button { position: relative; width: 2rem; height: 2rem; display: grid !important; grid-column: auto !important; grid-template-columns: none !important; place-items: center; border: 0 !important; padding: 0 !important; background: transparent !important; color: #625e57 !important; cursor: pointer; opacity: .76; transition: opacity .18s ease, color .18s ease, background .18s ease; }
+.shared-controls > button:hover, .shared-controls > button:focus-visible { background: rgb(245 243 237 / 62%) !important; color: var(--ink) !important; opacity: 1; outline: none; }
+.shared-controls > button:disabled { cursor: default; opacity: .25; }
+.shared-controls svg { width: .95rem; fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+.shared-controls button span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.shared-autoplay .play-icon { display: none; }
+.shared-controls:not(.playing) .shared-autoplay .pause-icon { display: none; }
+.shared-controls:not(.playing) .shared-autoplay .play-icon { display: block; }
+.shared-download.busy svg { animation: shared-download-pulse .8s ease-in-out infinite alternate; }
+.shared-progress { width: 100%; grid-column: auto; }
+.shared-progress .folio-segment { position: relative; overflow: hidden; }
+.shared-controls.playing ~ .shared-progress .folio-segment.active::after { position: absolute; top: calc(50% - .5px); right: 0; left: 0; height: 1px; content: ""; background: var(--ink); transform: scaleX(0); transform-origin: left center; animation: shared-autoplay-progress 5s linear forwards; }
+.shared-cropped { object-fit: cover; object-position: var(--share-crop-x) var(--share-crop-y); }
+.shared-empty { width: 100%; aspect-ratio: 3 / 4; display: grid; place-items: center; background: var(--paper); color: var(--muted); font-size: .65rem; }
+.shared-footer { display: none; }
+@keyframes shared-autoplay-progress { to { transform: scaleX(1); } }
+@keyframes shared-download-pulse { to { opacity: .35; transform: translateY(2px); } }
+@media (max-width: 860px) {
+  html, body, #app { min-height: 100%; overflow: auto; }
+  .shared-page { padding: .75rem .75rem 1.25rem; }
+  .shared-header { right: .75rem; left: .75rem; height: 2.35rem; padding: 0 5.1rem 0 .45rem; background: #dedbd3; }
+  .shared-header > a { display: none; }
+  .shared-header .workspace-title-row { min-width: 0; gap: .55rem; }
+  .shared-header h1 { overflow: hidden; font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
+  .shared-header small { display: none; }
+  .shared-artboard-wrap { width: min(100%, 42rem); min-height: 0; align-content: start; padding-top: 2.35rem; }
+  .shared-canvas-tools { top: .25rem; right: .45rem; left: auto; display: flex; gap: .4rem; }
+  .shared-controls > button { width: 1.9rem; height: 1.9rem; }
+  .shared-progress { margin-top: .75rem; }
 }
-
-.shared-controls.playing .shared-progress button.active::after {
-  position: absolute;
-  inset: 0;
-  content: "";
-  background: #201f1b;
-  transform: scaleX(0);
-  transform-origin: left center;
-  animation: shared-autoplay-progress 5s linear forwards;
-}
-
-.shared-autoplay {
-  grid-column: 1;
-}
-
-.shared-autoplay .play-icon {
-  display: none;
-}
-
-.shared-controls:not(.playing) .shared-autoplay .pause-icon {
-  display: none;
-}
-
-.shared-controls:not(.playing) .shared-autoplay .play-icon {
-  display: block;
-}
-
-.shared-download {
-  grid-column: 2 / -1 !important;
-}
-
-.shared-download.busy svg {
-  animation: shared-download-pulse .8s ease-in-out infinite alternate;
-}
-
-@keyframes shared-autoplay-progress {
-  to { transform: scaleX(1); }
-}
-
-@keyframes shared-download-pulse {
-  to {
-    opacity: .35;
-    transform: translateY(2px);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .shared-controls.playing .shared-progress button.active::after {
-    animation: none;
-    transform: scaleX(1);
-  }
+  .shared-controls.playing ~ .shared-progress .folio-segment.active::after { animation: none; transform: scaleX(1); }
 }
