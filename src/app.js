@@ -1,4 +1,6 @@
 import './style.css';
+import './sermo.css';
+import {startSermoLogin} from './sermo-login.js';
 import { debugLog, debugError } from './debug-log.js';
 import { independentPhotoFile } from './photo-file.js';
 import { parseExif } from './exif.js';
@@ -211,12 +213,14 @@ app.innerHTML = `
         <p class="onboarding-lead">可以先建立当前设备上的身份，已有云端账户也可以直接登录。</p>
         <label class="onboarding-name"><span>昵称</span><input class="onboarding-nickname" maxlength="24" autocomplete="nickname" placeholder="如何称呼你" required></label>
         <div class="onboarding-avatar-grid" role="radiogroup" aria-label="选择头像"></div>
-        <div class="onboarding-entry-actions"><button class="onboarding-cloud-entry" type="button">登录云端用户</button><button class="onboarding-next" type="submit">创建本地用户</button></div>
+        <div class="onboarding-entry-actions"><button class="onboarding-cloud-entry" type="button">手机号登录</button><button class="sermo-login" type="button">使用 Sermo 登录</button><button class="onboarding-next" type="submit">创建本地用户</button></div>
+        <p class="sermo-entry-note" role="status" hidden></p>
       </form>
       <form class="onboarding-step onboarding-cloud-step" hidden>
         <button class="onboarding-cloud-back" type="button">← 返回</button>
         <p class="eyebrow">Cloud account</p>
         <h1>登录云端用户</h1>
+        <button class="sermo-login" type="button">使用 Sermo 登录</button><p class="sermo-entry-note" role="status" hidden></p>
         <p class="onboarding-lead">使用手机号验证码登录，作品集与我的 LOGO 会在登录后恢复。</p>
         <label><span>手机号</span><input class="onboarding-cloud-phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="请输入中国大陆手机号" maxlength="13" required></label>
         <label><span>验证码</span><span class="onboarding-code-row"><input class="onboarding-cloud-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码" maxlength="6" required><button class="onboarding-cloud-send" type="button">获取验证码</button></span></label>
@@ -301,7 +305,7 @@ app.innerHTML = `
             <div><strong class="profile-tier">本地用户</strong><small class="account-summary-copy">资料与作品集仅保存在当前设备</small><button class="account-logout" type="button" hidden>退出云端账户</button></div>
           </div>
           <button class="user-settings-entry account-entry" type="button" data-user-panel="account">
-            <span><strong>连接云端账户</strong><small>使用手机号认证，系统将自动创建或连接账户</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+            <span><strong>连接云端账户</strong><small>使用手机号或 Sermo 登录</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
           <button class="user-settings-entry" type="button" data-user-panel="nickname">
             <span><strong>修改昵称</strong><small class="nickname-setting-current"></small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
@@ -325,6 +329,7 @@ app.innerHTML = `
         </section>
         <section class="user-subpanel account-setting" data-user-view="account" hidden>
           <button class="user-panel-back" type="button" data-user-back><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg><span>连接云端账户</span></button>
+          <button class="sermo-login" type="button">使用 Sermo 登录</button><p class="sermo-entry-note" role="status" hidden></p>
           <form class="account-auth-form">
             <label><span>手机号</span><input class="account-phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="请输入中国大陆手机号" maxlength="13" required></label>
             <label><span>验证码</span><span class="account-code-row"><input class="account-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码" maxlength="6" required><button class="account-send-code" type="button">获取验证码</button></span></label>
@@ -714,7 +719,9 @@ function renderUserIdentity() {
   const nickname = cloudUser?.nickname || localProfile?.nickname;
   if (nickname) document.querySelectorAll('.profile-nickname').forEach(node => { node.textContent = nickname; });
   const summary = document.querySelector('.account-summary-copy');
-  if (summary) summary.textContent = cloud ? '账户已连接，云端作品集可跨设备访问' : '资料与作品集仅保存在当前设备';
+  if (summary) summary.textContent = cloud
+    ? cloudUser.login_methods?.includes('sermo') ? `已连接 Sermo · ${cloudUser.phone ? '已验证手机号' : '未设置手机号'}` : '账户已连接，云端作品集可跨设备访问'
+    : '资料与作品集仅保存在当前设备';
   const entry = document.querySelector('.account-entry');
   if (entry) entry.hidden = cloud;
   const logout = document.querySelector('.account-logout');
@@ -3622,6 +3629,33 @@ const photoSorter = createPhotoSorter({
     renderCollections();
     queueCloudMutation(`collection:${collection.id}`, 'collection-metadata', {collectionId: collection.id}, collection);
   },
+});
+
+document.querySelectorAll('.sermo-login').forEach(button => button.addEventListener('click', async () => {
+  const note = button.closest('.onboarding-step, .user-subpanel')?.querySelector('.sermo-entry-note');
+  button.disabled = true;
+  const label = button.textContent;
+  button.textContent = '正在前往 Sermo…';
+  if (note) note.hidden = true;
+  try { await startSermoLogin({returnEditor: !shell.classList.contains('mobile-library-open')}); }
+  catch (error) {
+    if (note) { note.textContent = error.message || '无法连接授权服务，请稍后重试'; note.hidden = false; }
+    button.disabled = false; button.textContent = label;
+  }
+}));
+window.addEventListener('pageshow', event => {
+  if (event.persisted) document.querySelectorAll('.sermo-login').forEach(button => { button.disabled = false; button.textContent = '使用 Sermo 登录'; });
+});
+cloudRestorePromise.then(user => {
+  const phoneEntry = sessionStorage.getItem('stillfolio-login-method') === 'phone';
+  sessionStorage.removeItem('stillfolio-login-method');
+  const returnEditor = sessionStorage.getItem('stillfolio-sermo-return-editor') === 'true';
+  sessionStorage.removeItem('stillfolio-sermo-return-editor');
+  if (user && returnEditor && mobileViewport.matches) openMobileEditor();
+  if (!user && phoneEntry) {
+    if (localRepositories.profile.load()) { openUserModal(); showUserPanel('account'); }
+    else { openOnboarding(); showOnboardingStep('cloud'); }
+  }
 });
 
 renderCollections();

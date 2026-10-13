@@ -24,6 +24,9 @@ self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
+  // OAuth callback URLs contain one-use credentials; never cache or replace
+  // them with an offline shell, and never cache their HTML as the homepage.
+  if (/^\/auth\/sermo\/callback\/?$/.test(url.pathname)) return;
   if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
   if (request.mode === 'navigate') {

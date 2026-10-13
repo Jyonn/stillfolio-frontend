@@ -24,10 +24,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm test
       - run: npm run build
         env:
           VITE_API_ORIGIN: https://api.stillfolio.jyonn.space
       - run: cp dist/index.html dist/404.html
+      - name: Verify Sermo callback route
+        run: test -s dist/auth/sermo/callback/index.html && cmp dist/index.html dist/auth/sermo/callback/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

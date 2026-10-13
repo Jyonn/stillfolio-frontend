@@ -1,0 +1,17 @@
+.sermo-login { display: block; min-height: 44px; border: 1px solid var(--ink); padding: .7rem 1rem; background: transparent; color: var(--ink); font: inherit; font-size: .75rem; cursor: pointer; }
+.sermo-login:hover:not(:disabled), .sermo-retry:hover { background: var(--ink); color: var(--paper); }
+.sermo-login:disabled, .sermo-retry:disabled { opacity: .5; cursor: wait; }
+.sermo-entry-note { color: #864b42; font-size: .75rem; line-height: 1.6; }
+.account-setting > .sermo-login { width: 100%; margin: .7rem 0 1rem; }
+.onboarding-cloud-step > .sermo-login { width: 100%; margin: 1rem 0; }
+.sermo-callback { min-height: 100dvh; display: grid; place-items: center; padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom)); background: var(--paper); }
+.sermo-card { width: min(100%, 32rem); border-block: 1px solid var(--line); padding: clamp(1.5rem, 5vw, 3rem) 0; }
+.sermo-card > img { width: 8rem; }
+.sermo-card h1 { margin: 2rem 0 1rem; font-family: "Noto Serif SC", serif; font-weight: 500; font-size: clamp(1.5rem, 5vw, 2rem); }
+.sermo-status { line-height: 1.8; color: #625e57; font-size: 1rem; }
+.sermo-callback-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; margin-top: 2rem; }
+.sermo-callback-actions[hidden] { display: none; }
+.sermo-callback-actions button { min-height: 44px; border: 1px solid var(--ink); padding: .7rem 1rem; background: transparent; color: var(--ink); cursor: pointer; font: inherit; }
+.sermo-callback-actions a { min-height: 44px; display: inline-flex; align-items: center; color: #625e57; }
+.sermo-login:focus-visible, .sermo-callback-actions :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+@media (max-width: 600px) { .sermo-callback-actions { flex-direction: column; align-items: stretch; } }
