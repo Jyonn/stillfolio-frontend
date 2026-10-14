@@ -3,7 +3,7 @@ import './share.css';
 import './share-controls.css';
 import brandLogoUrl from './assets/stillfolio-logo.svg?url';
 import { createReadonlyCanvas, layoutReadonlyCanvas } from './readonly-canvas.js';
-import { toBlob } from 'html-to-image';
+import { exportSharedCanvas } from './shared-canvas-export.js';
 import { apiUrl } from './api-origin.js';
 import { PageFlip } from 'page-flip';
 import { prepareShareQr } from './logo-display.js';
@@ -311,7 +311,7 @@ export async function renderSharedCollection(token) {
         await loadImageElement(image, url);
         await document.fonts?.ready;
         layoutReadonlyCanvas(exportHost, photo);
-        const blob = await toBlob(exportHost.querySelector('.artboard'), {backgroundColor: '#f5f3ed', pixelRatio: 3.6});
+        const blob = await exportSharedCanvas(exportHost.querySelector('.artboard'));
         if (!blob) throw new Error('画布导出失败');
         downloadBlob(blob, `${safeName(photo.file.name)}-stillfolio.png`);
         status.textContent = '画布已导出';
