@@ -4,6 +4,7 @@ import { debugLog, debugId, debugError } from '../debug-log.js';
 class CloudAccountRepository {
   accessToken = '';
   user = null;
+  refreshPromise = null;
 
   async request(path, options = {}) {
     const id = debugId(), started = performance.now();
@@ -16,6 +17,9 @@ class CloudAccountRepository {
     if (this.accessToken) headers.Authorization = `Bearer ${this.accessToken}`;
     const response = await fetch(apiUrl(`/api/v1${path}`), { credentials: 'include', ...options, headers });
     debugLog('响应头收到', {id, status: response.status, contentType: response.headers.get('content-type'), ms: Math.round(performance.now() - started)});
+    if (response.status === 401 && this.accessToken && !path.startsWith('/auth/') && !options.authRetried) {
+      if (await this.restore()) return this.request(path, {...options, authRetried: true});
+    }
     const data = options.raw ? await response.blob() : response.status === 204 ? null : await response.json().catch(() => ({}));
     if (!response.ok) {
       debugLog('HTTP 错误详情', {id, status: response.status, ...debugError(new Error(data?.detail || '响应未包含 detail 字段'))});
@@ -30,6 +34,12 @@ class CloudAccountRepository {
   }
 
   async restore() {
+    if (this.refreshPromise) return this.refreshPromise;
+    this.refreshPromise = this.restoreSession().finally(() => { this.refreshPromise = null; });
+    return this.refreshPromise;
+  }
+
+  async restoreSession() {
     try {
       const data = await this.request('/auth/refresh', { method: 'POST' });
       this.accessToken = data.access_token;
