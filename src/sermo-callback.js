@@ -14,12 +14,12 @@ export async function renderSermoCallback(search) {
   </section></main>`;
   const status = app.querySelector('.sermo-status');
   const actions = app.querySelector('.sermo-callback-actions');
-  let returnTo = '/', returnEditor = false;
+  let returnTo = '/', returnEditor = false, loginHint = '';
   app.querySelector('.sermo-retry').addEventListener('click', async event => {
     const button = event.currentTarget;
     button.disabled = true;
     status.textContent = '正在前往 Sermo 授权页…';
-    try { await startSermoLogin({returnTo, returnEditor}); }
+    try { await startSermoLogin({returnTo, returnEditor, loginHint}); }
     catch { status.textContent = '无法连接授权服务，请稍后重试或使用手机号登录'; button.disabled = false; }
   });
   app.querySelector('.sermo-phone').addEventListener('click', () => {
@@ -28,7 +28,7 @@ export async function renderSermoCallback(search) {
   });
   try {
     const flow = consumeSermoCallback(search, sessionStorage);
-    returnTo = flow.returnTo; returnEditor = flow.returnEditor;
+    returnTo = flow.returnTo; returnEditor = flow.returnEditor; loginHint = flow.loginHint;
     const response = await fetch(apiUrl('/api/v1/auth/sermo/complete'), {
       method: 'POST', credentials: 'include', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(flow.body), signal: AbortSignal.timeout(45000),
     });

@@ -29,8 +29,12 @@ jobs:
         env:
           VITE_API_ORIGIN: https://api.stillfolio.jyonn.space
       - run: cp dist/index.html dist/404.html
-      - name: Verify Sermo callback route
-        run: test -s dist/auth/sermo/callback/index.html && cmp dist/index.html dist/auth/sermo/callback/index.html
+      - name: Verify Sermo static routes
+        run: |
+          for route in callback start; do
+            test -s dist/auth/sermo/$route/index.html
+            cmp dist/index.html dist/auth/sermo/$route/index.html
+          done
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

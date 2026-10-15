@@ -5,6 +5,25 @@
 
 ## Sermo 登录
 
+### Sermo 直达入口
+
+`https://stillfolio.jyonn.space/auth/sermo/start?source=sermo&login_hint=wzry%3A54`
+（也支持尾斜杠）。入口自动开始既有 PKCE 流程，不加载工作台、不检查已有登录来跳过授权。
+`source` 和其他参数不参与授权；可选 hint 只接受 1–64 位小写 slug（字母/数字开头，之后可含 `_`、`-`）和正的安全整数 ID。
+非法、重复 hint 忽略，仍可普通授权；hint 不是身份凭据，不传给 StillFolio start/complete API 或 Sermo token 接口。
+后端返回的 authorize URL 仍严格验证全部原参数，验证后才追加 hint。
+hint 随当前标签页 pending 事务保存；合法回调消费后用于失败/取消重试，每次重试生成新 state/verifier。
+无效 state 或已过期事务不恢复账号提示。失败不清空已有会话、作品数据，也不会自动循环跳转。
+
+构建脚本 `scripts/build-sermo-callback.mjs` 同时生成
+`dist/auth/sermo/start/index.html` 与 `dist/auth/sermo/callback/index.html`；
+GitHub Pages workflow 检查两者与主入口一致。Service Worker 不缓存或离线替换这两个授权路径。
+新入口复用现有登录状态页样式，无新增视觉系统；本轮无需后端迁移或修改 Sermo。
+
+自动测试覆盖 hint 边界/重复参数、严格 URL 校验、hint 不进入 API、取消后重试的新 PKCE、两标签页事务隔离，
+以及原有 state/PKCE/回调安全测试。真实多空间账号选择与授权同意需在 Sermo 有效登录态下手动验收；
+测试不自动同意授权，也不使用真实账号兑换凭据。
+
 首次进入、手机号登录页和用户设置的连接账户页均提供“使用 Sermo 登录”，现有手机号登录保留。
 授权由 Sermo 页面完成，不在 StillFolio 收集 Sermo 密码。
 

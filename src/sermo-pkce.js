@@ -4,6 +4,24 @@ const MAX_AGE = 300000;
 
 export class SermoFlowError extends Error {}
 
+export function validLoginHint(value) {
+  if (typeof value !== 'string') return '';
+  const match = /^([a-z0-9][a-z0-9_-]{0,63}):([1-9][0-9]*)$/.exec(value);
+  return match && Number.isSafeInteger(Number(match[2])) ? value : '';
+}
+
+export function loginHintFromSearch(search) {
+  const params = new URLSearchParams(search);
+  return params.getAll('login_hint').length === 1 ? validLoginHint(params.get('login_hint')) : '';
+}
+
+export function authorizeDestination(value, flow, loginHint = '') {
+  const url = new URL(validateAuthorizeUrl(value, flow));
+  const hint = validLoginHint(loginHint);
+  if (hint) url.searchParams.set('login_hint', hint);
+  return url.href;
+}
+
 export function base64url(bytes) {
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
@@ -29,11 +47,11 @@ export function validateAuthorizeUrl(value, flow) {
   return url.href;
 }
 
-export async function prepareSermoFlow(storage, {returnTo = '/', returnEditor = false, cryptoApi = crypto, now = Date.now()} = {}) {
+export async function prepareSermoFlow(storage, {returnTo = '/', returnEditor = false, loginHint = '', cryptoApi = crypto, now = Date.now()} = {}) {
   const state = base64url(cryptoApi.getRandomValues(new Uint8Array(32)));
   const verifier = base64url(cryptoApi.getRandomValues(new Uint8Array(64)));
   const code_challenge = await pkceChallenge(verifier, cryptoApi);
-  storage.setItem(SERMO_PENDING_KEY, JSON.stringify({state, verifier, returnTo: safeReturnTo(returnTo), returnEditor, createdAt: now}));
+  storage.setItem(SERMO_PENDING_KEY, JSON.stringify({state, verifier, returnTo: safeReturnTo(returnTo), returnEditor, loginHint: validLoginHint(loginHint), createdAt: now}));
   return {state, code_challenge, redirect_uri: SERMO_REDIRECT_URI};
 }
 
@@ -61,6 +79,6 @@ export function consumeSermoCallback(search, storage, now = Date.now()) {
   return {
     body: {state: pending.state, code_verifier: pending.verifier, redirect_uri: SERMO_REDIRECT_URI,
       ...(hasError ? {error: params.get('error') === 'access_denied' ? 'access_denied' : 'authorization_failed'} : {code: params.get('code')})},
-    returnTo: safeReturnTo(pending.returnTo), returnEditor: Boolean(pending.returnEditor), cancelled: params.get('error') === 'access_denied',
+    returnTo: safeReturnTo(pending.returnTo), returnEditor: Boolean(pending.returnEditor), loginHint: validLoginHint(pending.loginHint), cancelled: params.get('error') === 'access_denied',
   };
 }
