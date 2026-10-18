@@ -39,7 +39,7 @@ export function validateAuthorizeUrl(value, flow) {
   const url = new URL(value);
   const expected = {client_id: 'stillfolio', redirect_uri: SERMO_REDIRECT_URI, response_type: 'code',
     scope: 'profile phone vip', state: flow.state, code_challenge: flow.code_challenge, code_challenge_method: 'S256'};
-  if (url.origin !== 'https://sermo.jyonn.space' || url.pathname !== '/oauth/authorize' || url.username || url.password || url.hash
+  if (url.origin !== 'https://frienden.jyonn.space' || url.pathname !== '/oauth/authorize' || url.username || url.password || url.hash
       || [...url.searchParams.keys()].some(key => !(key in expected))
       || Object.entries(expected).some(([key, value]) => url.searchParams.getAll(key).length !== 1 || url.searchParams.get(key) !== value)) {
     throw new SermoFlowError('授权地址与接入契约不符，请联系管理员');

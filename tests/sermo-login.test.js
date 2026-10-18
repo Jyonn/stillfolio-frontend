@@ -27,7 +27,7 @@ test('direct login uses existing backend request and fresh PKCE after failure, p
   globalThis.fetch = async (_path, options) => {
     const flow = JSON.parse(options.body);
     assert.notEqual(flow.state, first.state);
-    return {ok: true, json: async () => ({authorize_url: `https://sermo.jyonn.space/oauth/authorize?${new URLSearchParams({...flow, client_id: 'stillfolio', response_type: 'code', scope: 'profile phone vip', code_challenge_method: 'S256'})}`})};
+    return {ok: true, json: async () => ({authorize_url: `https://frienden.jyonn.space/oauth/authorize?${new URLSearchParams({...flow, client_id: 'stillfolio', response_type: 'code', scope: 'profile phone vip', code_challenge_method: 'S256'})}`})};
   };
   await startSermoLogin({loginHint: 'wzry:54', returnTo: '/', returnEditor: true});
   assert.equal(new URL(destination).searchParams.get('login_hint'), 'wzry:54');

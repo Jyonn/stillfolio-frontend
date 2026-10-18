@@ -19,11 +19,11 @@ test('hint is appended only after strict authorization validation and never sent
   const storage = memoryStorage();
   const flow = await prepareSermoFlow(storage, {loginHint: 'wzry:54'});
   assert.equal(flow.loginHint, undefined);
-  const url = `https://sermo.jyonn.space/oauth/authorize?${new URLSearchParams({...flow, client_id: 'stillfolio', response_type: 'code', scope: 'profile phone vip', code_challenge_method: 'S256'})}`;
+  const url = `https://frienden.jyonn.space/oauth/authorize?${new URLSearchParams({...flow, client_id: 'stillfolio', response_type: 'code', scope: 'profile phone vip', code_challenge_method: 'S256'})}`;
   assert.equal(new URL(authorizeDestination(url, flow, 'wzry:54')).searchParams.get('login_hint'), 'wzry:54');
   assert.equal(authorizeDestination(url, flow, 'invalid'), url);
   assert.throws(() => authorizeDestination(url + '&login_hint=wzry:54', flow, 'wzry:54'));
-  assert.throws(() => authorizeDestination(url.replace('sermo.jyonn.space', 'evil.example'), flow, 'wzry:54'));
+  assert.throws(() => authorizeDestination(url.replace('frienden.jyonn.space', 'evil.example'), flow, 'wzry:54'));
   const result = consumeSermoCallback(`?state=${flow.state}&error=access_denied`, storage);
   assert.equal(result.loginHint, 'wzry:54');
   assert.equal(result.body.loginHint, undefined);
@@ -91,12 +91,13 @@ test('return pages cannot become open redirects or credential-bearing URLs', () 
 test('authorization URL must exactly match host, redirect, scope, state and S256', async () => {
   const flow = await prepareSermoFlow(memoryStorage());
   const params = new URLSearchParams({...flow, client_id: 'stillfolio', response_type: 'code', scope: 'profile phone vip', code_challenge_method: 'S256'});
-  const url = `https://sermo.jyonn.space/oauth/authorize?${params}`;
+  const url = `https://frienden.jyonn.space/oauth/authorize?${params}`;
   assert.equal(validateAuthorizeUrl(url, flow), url);
+  assert.throws(() => validateAuthorizeUrl(url.replace('frienden.jyonn.space', 'sermo.jyonn.space'), flow));
   for (const [key, value] of [['redirect_uri', SERMO_REDIRECT_URI + '/'], ['code_challenge_method', 'plain'], ['state', 'other'], ['scope', 'profile']]) {
     const changed = new URL(url); changed.searchParams.set(key, value);
     assert.throws(() => validateAuthorizeUrl(changed.href, flow));
   }
   assert.throws(() => validateAuthorizeUrl(url + '&state=other', flow));
-  assert.throws(() => validateAuthorizeUrl(url.replace('sermo.jyonn.space', 'evil.example'), flow));
+  assert.throws(() => validateAuthorizeUrl(url.replace('frienden.jyonn.space', 'evil.example'), flow));
 });
