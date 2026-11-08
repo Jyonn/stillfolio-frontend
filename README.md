@@ -56,3 +56,7 @@ Service Worker 不处理/缓存回调导航，也不会把它缓存为首页；�
 
 测试：`npm test`。构建：`npm run build`。回调与入口需人工验证直接访问、刷新、取消、失败、重试，以及成功后主页刷新/退出。
 后端 API、数据迁移、安全和权益规则见 `../stillfolio-backend/README.md`。
+
+## 从友间选择相册
+
+友间从聊天打开 `/frienden/pick/?state=…&origin=…`。选择页只列出当前留幅账号已创建分享链接的相册。未登录时，在独立标签页登录留幅，再返回选择页刷新。选择后，留幅通过 `postMessage` 只把公开相册 URL 和原始 state 发给指定的友间窗口。友间应检查发送方 origin、窗口和 state，再把链接填入当前草稿。

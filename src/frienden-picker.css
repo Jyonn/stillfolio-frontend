@@ -1,0 +1,24 @@
+.frienden-picker { align-items: start; padding-top: max(2.5rem, env(safe-area-inset-top)); }
+.frienden-picker-help { line-height: 1.7; }
+.frienden-picker [hidden] { display: none; }
+.frienden-picker-list { list-style: none; padding: 0; max-height: 55dvh; overflow: auto; }
+.frienden-picker-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: .4rem 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.frienden-picker-list button {
+  flex: none;
+  min-height: 44px;
+  padding: .5rem .9rem;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  cursor: pointer;
+}
+.frienden-picker :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
