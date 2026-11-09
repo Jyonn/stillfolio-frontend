@@ -5,6 +5,8 @@ const sermoCallback = /^\/auth\/sermo\/callback\/?$/.test(window.location.pathna
 const sermoStart = /^\/auth\/sermo\/start\/?$/.test(window.location.pathname);
 const friendenPicker = /^\/frienden\/pick\/?$/.test(window.location.pathname);
 
+const oauthPortal = /^\/(?:developer(?:\/(?:admin|docs))?|account\/applications|oauth\/authorize)\/?$/.test(window.location.pathname);
+
 if (sermoCallback) {
   const search = window.location.search;
   // Scrub before loading any route module, logger, or making API requests.
@@ -18,6 +20,8 @@ if (sermoCallback) {
   const search = window.location.search;
   window.history.replaceState(null, '', window.location.pathname);
   import('./frienden-picker.js').then(module => module.renderFriendenPicker(search));
+} else if (oauthPortal) {
+  import('./oauth-portal.js').then(module => module.renderOAuthPortal());
 } else if (shareMatch) {
   registerWebApp();
   import('./share.js').then(module => module.renderSharedCollection(shareMatch[1]));

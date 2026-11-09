@@ -9,6 +9,7 @@ class CloudAccountRepository {
   async request(path, options = {}) {
     const id = debugId(), started = performance.now();
     const safePath = path.split('?')[0];
+    const owner = this.user?.id;
     debugLog('请求开始', {id, method: options.method || 'GET', path: safePath});
     const slow = setTimeout(() => debugLog('请求等待超过15秒', {id, path: safePath}), 15000);
     try {
@@ -17,8 +18,9 @@ class CloudAccountRepository {
     if (this.accessToken) headers.Authorization = `Bearer ${this.accessToken}`;
     const response = await fetch(apiUrl(`/api/v1${path}`), { credentials: 'include', ...options, headers });
     debugLog('响应头收到', {id, status: response.status, contentType: response.headers.get('content-type'), ms: Math.round(performance.now() - started)});
-    if (response.status === 401 && this.accessToken && !path.startsWith('/auth/') && !options.authRetried) {
-      if (await this.restore()) return this.request(path, {...options, authRetried: true});
+    if (response.status === 401 && owner && this.user?.id === owner && !path.startsWith('/auth/') && !options.authRetried) {
+      const user = await this.restore();
+      if (owner && user?.id === owner) return this.request(path, {...options, authRetried: true});
     }
     const data = options.raw ? await response.blob() : response.status === 204 ? null : await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -41,7 +43,7 @@ class CloudAccountRepository {
 
   async restoreSession() {
     try {
-      const data = await this.request('/auth/refresh', { method: 'POST' });
+      const data = await this.request('/auth/refresh', { method: 'POST', signal: AbortSignal.timeout(8000) });
       this.accessToken = data.access_token;
       this.user = data.user;
       return this.user;
@@ -50,36 +52,6 @@ class CloudAccountRepository {
       this.user = null;
       return null;
     }
-  }
-
-  async sendCode(phone, scene) {
-    return this.request('/auth/sms/send', {
-      method: 'POST',
-      body: JSON.stringify({ phone, scene }),
-    });
-  }
-
-  async verify({ phone, code, scene, profile }) {
-    const data = await this.request('/auth/sms/verify', {
-      method: 'POST',
-      body: JSON.stringify({
-        phone,
-        code,
-        scene,
-        nickname: profile?.nickname,
-        avatar_type: profile?.avatarType,
-        avatar_value: profile?.avatarValue,
-      }),
-    });
-    this.accessToken = data.access_token;
-    this.user = data.user;
-    this.created = Boolean(data.created);
-    return this.user;
-  }
-
-  async updateProfile(profile) {
-    this.user = await this.request('/me', {method: 'PATCH', body: JSON.stringify(profile)});
-    return this.user;
   }
 
   async logout() {

@@ -31,6 +31,7 @@ export async function pkceChallenge(verifier, cryptoApi = crypto) {
 }
 
 export function safeReturnTo(path) {
+  if (typeof path === 'string' && /^\/oauth\/authorize\/\?request=[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(path)) return path;
   return typeof path === 'string' && /^\/(?!\/)/.test(path) && !/[\\\u0000-\u0020\u007f]/.test(path)
     && !path.startsWith('/auth/') && !path.includes('?') ? path : '/';
 }

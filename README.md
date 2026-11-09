@@ -3,7 +3,15 @@
 留幅摄影作品集工作台。`npm run dev` 启动开发服务，`npm test` 执行测试，`npm run build` 构建 GitHub Pages 静态站。
 生产 API 通过 `VITE_API_ORIGIN=https://api.stillfolio.jyonn.space` 配置。
 
-## Sermo 登录
+## 本机相册与云端发布
+
+相册、照片与编辑设置保存在本机浏览器。联网打开并完成 PWA 缓存后，断网重开仍能新建、导入、编辑和导出。友间登录用于访问云端副本，已有本机相册可继续使用。
+
+- 点击「分享」或「发布到云端」，确认后以当前本机相册创建或更新公开副本。再次发布复用已有链接，照片未变时复用云端文件。
+- 登录、普通编辑与恢复网络均不会自动上传相册。「云端副本」中的下载会另存到本机。删除本机相册只删除本机内容，公开链接可以单独撤销。
+- 旧版保留在本机的相册无需迁移。仅存在于云端的照片可通过「云端副本」找回；如果本机相册不完整，请先下载云端版本再决定发布内容。
+
+## 友间登录
 
 ### Sermo 直达入口
 
@@ -24,7 +32,7 @@ GitHub Pages workflow 检查两者与主入口一致。Service Worker 不缓存�
 以及原有 state/PKCE/回调安全测试。真实多空间账号选择与授权同意需在 Sermo 有效登录态下手动验收；
 测试不自动同意授权，也不使用真实账号兑换凭据。
 
-首次进入、手机号登录页和用户设置的连接账户页均提供“使用 Sermo 登录”，现有手机号登录保留。
+用户设置、发布及云端副本入口均提供「使用友间登录」。
 授权由 Sermo 页面完成，不在 StillFolio 收集 Sermo 密码。
 
 客户端 ID 为 `stillfolio`；唯一注册回调是 `https://stillfolio.jyonn.space/auth/sermo/callback`。
@@ -37,8 +45,8 @@ GitHub Pages workflow 检查两者与主入口一致。Service Worker 不缓存�
 前端严格核对并一次性消费 pending state/verifier，再 POST 给后端 complete；token/userinfo 的网络请求仅发生在后端。
 Sermo token 不进入前端；后端返回的 StillFolio access token也不写浏览器存储，返回工作台后通过自身 refresh cookie恢复会话。
 
-取消、网络失败、跨账户身份冲突、无效/过期/重复回调均展示失败原因及“重新使用 Sermo 登录 / 使用手机号登录 / 返回作品集”。
-相同的已验证手机号会自动绑定既有账户，已绑定另一 Sermo 身份时自动换绑；旧会话失效，手机号登录保留。
+取消、网络失败、跨账户身份冲突、无效/过期/重复回调均展示失败原因，并提供重新授权和返回作品集。
+相同的已验证手机号会自动绑定既有账户，已绑定另一 Sermo 身份时自动换绑；旧会话失效。
 云端请求遇到过期 access token 时共享一次 refresh 并只重试一次；已被换绑撤销的会话不能刷新或重试获取权限。
 重试创建全新的 state/verifier，不重新兑换旧 code。回调刷新缺少上下文时安全失败，不重放授权。
 成功使用同源相对路径返回，不接受外部跳转或携带凭据的返回 URL；移动端保留登录前的作品集详情入口。
@@ -49,7 +57,7 @@ Sermo token 不进入前端；后端返回的 StillFolio access token也不写�
 `npm run build` 的 `scripts/build-sermo-callback.mjs` 把构建入口复制到 `dist/auth/sermo/callback/index.html`。
 GitHub Pages 可将无尾斜杠地址 canonicalize 到目录尾斜杠，前端识别两种路径，但授权请求中的注册回调始终保持无斜杠原值。
 该路径直接访问/刷新有真实静态页，而不是仅依赖 HTTP 404 SPA 回退；CI 检查回调文件存在且与入口一致。
-Service Worker 不处理/缓存回调导航，也不会把它缓存为首页；授权页面不注册离线应用壳。
+构建时生成离线壳的版本及缓存清单，覆盖主入口、脚本、样式、图标和按需加载的图片解码模块。授权、公开分享和 API 请求始终走网络。
 
 本地真实授权不受支持：唯一回调返回生产域名，无法读取 localhost 标签页的临时上下文。
 本地跑 mock/RFC PKCE 测试，真实授权联调在生产站进行。不要添加未注册的 localhost 回调或放宽校验。
@@ -60,3 +68,10 @@ Service Worker 不处理/缓存回调导航，也不会把它缓存为首页；�
 ## 从友间选择相册
 
 友间从聊天打开 `/frienden/pick/?state=…&origin=…`。选择页只列出当前留幅账号已创建分享链接的相册。未登录时，在独立标签页登录留幅，再返回选择页刷新。选择后，留幅通过 `postMessage` 只把公开相册 URL 和原始 state 发给指定的友间窗口。友间应检查发送方 origin、窗口和 state，再把链接填入当前草稿。
+
+
+## OAuth 开发者平台
+
+「用户设置」可进入 `/developer/` 登记应用，或在 `/account/applications/` 查看和撤销授权。应用发起授权后，用户通过友间登录并在 `/oauth/authorize/` 选择同意或拒绝。接入说明见 `/developer/docs/`，独立审批入口为 `/developer/admin/`。
+
+第三方访问限于云端相册。分享权限须经管理员审批，并由相册所有者授权。

@@ -86,6 +86,10 @@ test('direct callback refresh without state never produces an exchange body', ()
 test('return pages cannot become open redirects or credential-bearing URLs', () => {
   for (const path of ['https://evil.example', '//evil.example', '/\\evil.example', '/auth/sermo/callback', '/?code=secret', '/\r\nevil', '/\t/evil.example']) assert.equal(safeReturnTo(path), '/');
   assert.equal(safeReturnTo('/share/abc'), '/share/abc');
+  const consent = '/oauth/authorize/?request=95105552-3c28-4f0c-949d-0e654fb4ee21';
+  assert.equal(safeReturnTo(consent), consent);
+  assert.equal(safeReturnTo(consent + '&code=secret'), '/');
+  assert.equal(safeReturnTo('/oauth/authorize/?request=//evil.example'), '/');
 });
 
 test('authorization URL must exactly match host, redirect, scope, state and S256', async () => {

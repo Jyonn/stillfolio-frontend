@@ -3,9 +3,11 @@ export function registerWebApp() {
   document.documentElement.classList.toggle('webapp-standalone', standalone);
 
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
-  window.addEventListener('load', () => {
+  const register = () => {
     navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(error => {
       console.warn('无法启用离线应用壳', error);
     });
-  }, { once: true });
+  };
+  if (document.readyState === 'complete') register();
+  else window.addEventListener('load', register, { once: true });
 }

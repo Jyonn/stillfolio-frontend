@@ -29,9 +29,9 @@ jobs:
         env:
           VITE_API_ORIGIN: https://api.stillfolio.jyonn.space
       - run: cp dist/index.html dist/404.html
-      - name: Verify Frienden static routes
+      - name: Verify login and OAuth static routes
         run: |
-          for route in auth/sermo/callback auth/sermo/start frienden/pick; do
+          for route in auth/sermo/callback auth/sermo/start frienden/pick developer developer/admin developer/docs account/applications oauth/authorize; do
             test -s dist/$route/index.html
             cmp dist/index.html dist/$route/index.html
           done

@@ -1,8 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">留幅 · 留一格</title>
   <rect width="512" height="512" fill="#ece8df"/>
-  <g fill="none" stroke="#201f1b" stroke-width="24" stroke-linecap="square">
-    <path d="M74 174V74h100M338 74h100v100M438 338v100H338M174 438H74V338"/>
-    <path d="M126 325c71-101 134-112 190-57 38 38 68 33 86 8" stroke="#918979" stroke-width="19"/>
-    <circle cx="362" cy="192" r="26" fill="#201f1b" stroke="none"/>
+  <g id="icon">
+    <rect x="75" y="75" width="362" height="362" rx="74" fill="#252620"/>
+    <path d="M154 158h204v146H154z" fill="#f4efe5"/>
+    <path d="M154 304v-34l68-63 45 39 33-29 58 53v34z" fill="#9b543c"/>
+    <path d="M154 340h120v25H154z" fill="#f4efe5"/>
   </g>
 </svg>

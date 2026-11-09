@@ -7,7 +7,7 @@ import { parseExif } from './exif.js';
 import { createCollection, loadAsset, loadAssets, loadCollections, loadPhotos, localRepositories, photoId, removeAsset, removePhoto, saveAsset, saveCollections, savePhoto } from './repositories/local.js';
 import { cloudAccountRepository } from './repositories/cloud.js';
 import { cloudSyncRepository } from './repositories/sync.js';
-import { cloudMutationQueue } from './repositories/sync-queue.js';
+import { publishAlbum, restoreAlbumCopy } from './repositories/publication.js';
 import { applyCropVariables, applyInlineCrop, clearCropVariables, cropLayout, needsCrop, normalizeCrop } from './crop-layout.js';
 import { createWindowedCarousel } from './carousel.js';
 import { createPhotoSorter } from './photo-sorter.js';
@@ -77,10 +77,10 @@ app.innerHTML = `
       <header class="mobile-library-header">
         <a href="/" aria-label="留幅 STILLFOLIO 首页"><img src="${brandLogoUrl}" alt="留幅 STILLFOLIO"></a>
         <div class="mobile-account-controls">
-          <button class="global-sync global-sync-mobile" type="button" aria-label="查看云端同步状态" title="云端同步状态" aria-expanded="false">${cloudIconMarkup()}</button>
+          <button class="global-sync global-sync-mobile" type="button" aria-label="查看云端副本" title="云端副本" aria-expanded="false">${cloudIconMarkup()}</button>
           <button class="mobile-user-profile user-profile-trigger" type="button" aria-label="打开用户设置">
             <span class="mobile-user-menu user-avatar avatar-sprite" aria-hidden="true"></span>
-            <span class="user-profile-copy"><strong class="profile-nickname">JYONN</strong><small class="profile-tier">本地用户</small></span>
+            <span class="user-profile-copy"><strong class="profile-nickname">留幅用户</strong><small class="profile-tier">本机工作区</small></span>
           </button>
         </div>
       </header>
@@ -135,18 +135,12 @@ app.innerHTML = `
       <button class="canvas-info" type="button" aria-label="查看照片信息" title="查看照片信息" aria-expanded="false" disabled>
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 10v6M12 7.5h.01"/></svg>
       </button>
-      <button class="photo-sync" type="button" aria-label="当前照片同步状态" title="照片同步状态" hidden>
-        <svg class="photo-sync-cloud" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 18h10.1a4.2 4.2 0 0 0 .7-8.3A6.1 6.1 0 0 0 6.5 8.2 4.9 4.9 0 0 0 7.2 18Z"/></svg>
-        <svg class="photo-sync-state photo-sync-loading" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M17 3.8h3.2V7"/></svg>
-        <svg class="photo-sync-state photo-sync-success" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 12 2.6 2.6L16.5 9"/></svg>
-        <svg class="photo-sync-state photo-sync-failure" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5M12 16h.01"/></svg>
-      </button>
       <aside class="canvas-info-panel" aria-hidden="true" aria-label="照片信息">
         <header><span>Photograph details</span><button class="canvas-info-close" type="button" aria-label="关闭照片信息">×</button></header>
         <div class="meta"></div>
       </aside>
-      <aside class="canvas-sync-panel" aria-hidden="true" aria-label="同步状态">
-        <header><span>Cloud sync</span><button class="canvas-sync-close" type="button" aria-label="关闭同步状态">×</button></header>
+      <aside class="canvas-sync-panel" aria-hidden="true" aria-label="云端副本">
+        <header><span>云端副本</span><button class="canvas-sync-close" type="button" aria-label="关闭同步状态">×</button></header>
         <div class="sync-status-body"></div>
       </aside>
       <nav class="folio-nav" aria-label="照片切换" hidden></nav>
@@ -197,48 +191,13 @@ app.innerHTML = `
       <div class="rail-account-row">
         <button class="rail-user user-profile-trigger" type="button" aria-label="打开用户设置">
           <span class="user-menu user-avatar avatar-sprite" aria-hidden="true"></span>
-          <span class="rail-user-copy"><strong class="profile-nickname">JYONN</strong><small class="profile-tier">本地用户</small></span>
+          <span class="rail-user-copy"><strong class="profile-nickname">留幅用户</strong><small class="profile-tier">本机工作区</small></span>
         </button>
-        <button class="global-sync global-sync-rail" type="button" aria-label="查看云端同步状态" title="云端同步状态" aria-expanded="false">${cloudIconMarkup()}</button>
+        <button class="global-sync global-sync-rail" type="button" aria-label="查看云端副本" title="云端副本" aria-expanded="false">${cloudIconMarkup()}</button>
       </div>
       <input class="picker" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden />
     </aside>
   </main>
-  <div class="onboarding" aria-hidden="true">
-    <section class="onboarding-card" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
-      <header class="onboarding-brand"><img src="${brandLogoUrl}" alt="留幅 STILLFOLIO"><span>01 / 02</span></header>
-      <form class="onboarding-step onboarding-profile-step">
-        <p class="eyebrow">Before the first frame</p>
-        <h1 id="onboarding-title">先留下你的名字</h1>
-        <p class="onboarding-lead">可以先建立当前设备上的身份，已有云端账户也可以直接登录。</p>
-        <label class="onboarding-name"><span>昵称</span><input class="onboarding-nickname" maxlength="24" autocomplete="nickname" placeholder="如何称呼你" required></label>
-        <div class="onboarding-avatar-grid" role="radiogroup" aria-label="选择头像"></div>
-        <div class="onboarding-entry-actions"><button class="onboarding-cloud-entry" type="button">手机号登录</button><button class="sermo-login" type="button">使用 Sermo 登录</button><button class="onboarding-next" type="submit">创建本地用户</button></div>
-        <p class="sermo-entry-note" role="status" hidden></p>
-      </form>
-      <form class="onboarding-step onboarding-cloud-step" hidden>
-        <button class="onboarding-cloud-back" type="button">← 返回</button>
-        <p class="eyebrow">Cloud account</p>
-        <h1>登录云端用户</h1>
-        <button class="sermo-login" type="button">使用 Sermo 登录</button><p class="sermo-entry-note" role="status" hidden></p>
-        <p class="onboarding-lead">使用手机号验证码登录，作品集与我的 LOGO 会在登录后恢复。</p>
-        <label><span>手机号</span><input class="onboarding-cloud-phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="请输入中国大陆手机号" maxlength="13" required></label>
-        <label><span>验证码</span><span class="onboarding-code-row"><input class="onboarding-cloud-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码" maxlength="6" required><button class="onboarding-cloud-send" type="button">获取验证码</button></span></label>
-        <p class="onboarding-cloud-note" hidden></p>
-        <button class="onboarding-cloud-submit" type="submit">登录并进入</button>
-      </form>
-      <form class="onboarding-step onboarding-geo-step" hidden>
-        <p class="eyebrow">Location service</p>
-        <h1>让坐标成为地名</h1>
-        <p class="onboarding-lead">任选一种服务，也可以暂时跳过。登录认证后，可免费使用 50 次云端解析。</p>
-        <label><span>高德 Web Service Key</span><input class="onboarding-amap-key" type="password" autocomplete="off" placeholder="适合中文地址"></label>
-        <a class="onboarding-help" href="/help/amap-key.html" target="_blank" rel="noopener">查看高德申请教程 ↗</a>
-        <label><span>OpenCage API Key</span><input class="onboarding-opencage-key" type="password" autocomplete="off" placeholder="适合英文地址"></label>
-        <a class="onboarding-help" href="/help/opencage-key.html" target="_blank" rel="noopener">查看 OpenCage 申请教程 ↗</a>
-        <div class="onboarding-actions"><button class="onboarding-skip" type="button">暂时跳过</button><button type="submit">保存并进入</button></div>
-      </form>
-    </section>
-  </div>
   <div class="collection-modal" aria-hidden="true">
     <div class="collection-modal-backdrop"></div>
     <section class="collection-dialog" role="dialog" aria-modal="true" aria-labelledby="collection-dialog-title">
@@ -302,14 +261,16 @@ app.innerHTML = `
         <div class="user-settings-home">
           <div class="account-summary">
             <button class="profile-summary-avatar avatar-sprite" type="button" data-user-panel="avatar" aria-label="更换头像"></button>
-            <div><strong class="profile-tier">本地用户</strong><small class="account-summary-copy">资料与作品集仅保存在当前设备</small><button class="account-logout" type="button" hidden>退出云端账户</button></div>
+            <div><strong class="profile-tier">本机工作区</strong><small class="account-summary-copy">资料与作品集仅保存在当前设备</small><button class="account-logout" type="button" hidden>退出友间</button><small class="account-summary-note" role="status" hidden></small></div>
           </div>
           <button class="user-settings-entry account-entry" type="button" data-user-panel="account">
-            <span><strong>连接云端账户</strong><small>使用手机号或 Sermo 登录</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+            <span><strong>友间登录</strong><small>发布、分享和下载云端副本</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
           <button class="user-settings-entry" type="button" data-user-panel="nickname">
             <span><strong>修改昵称</strong><small class="nickname-setting-current"></small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
           </button>
+          <a class="user-settings-entry" href="/account/applications/"><span><strong>已授权应用</strong><small>查看和撤销相册访问权限</small></span><span aria-hidden="true">→</span></a>
+          <a class="user-settings-entry" href="/developer/"><span><strong>开发者平台</strong><small>登记应用与管理 OAuth 权限</small></span><span aria-hidden="true">→</span></a>
           <p class="geocode-quota-summary" role="status" hidden></p>
           <button class="user-settings-entry vip-claim" type="button" hidden><span><strong>领取创始 VIP 铭牌</strong><small>前 100 位注册用户 · 每周 100 次免费解析</small></span><span>→</span></button>
           <p class="vip-claim-note" role="status" hidden></p>
@@ -328,13 +289,9 @@ app.innerHTML = `
           </form>
         </section>
         <section class="user-subpanel account-setting" data-user-view="account" hidden>
-          <button class="user-panel-back" type="button" data-user-back><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg><span>连接云端账户</span></button>
-          <button class="sermo-login" type="button">使用 Sermo 登录</button><p class="sermo-entry-note" role="status" hidden></p>
-          <form class="account-auth-form">
-            <label><span>手机号</span><input class="account-phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="请输入中国大陆手机号" maxlength="13" required></label>
-            <label><span>验证码</span><span class="account-code-row"><input class="account-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码" maxlength="6" required><button class="account-send-code" type="button">获取验证码</button></span></label>
-            <p class="account-service-note" role="status" hidden></p>
-          </form>
+          <button class="user-panel-back" type="button" data-user-back><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg><span>友间登录</span></button>
+          <button class="sermo-login" type="button">使用友间登录</button><p class="sermo-entry-note" role="status" hidden></p>
+          <p class="account-service-note" role="status">登录后可发布相册或下载云端副本。相册编辑始终保存在本机。</p>
         </section>
         <section class="user-subpanel avatar-setting" data-user-view="avatar" hidden>
           <div class="avatar-panel-heading">
@@ -395,9 +352,9 @@ app.innerHTML = `
     <div class="sync-confirm-backdrop"></div>
     <section class="delete-dialog sync-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="sync-confirm-title" aria-describedby="sync-confirm-copy">
       <p class="eyebrow">Cloud collection</p>
-      <h2 id="sync-confirm-title">将作品集同步到云端？</h2>
-      <p id="sync-confirm-copy">同步后，这个作品集会永久设为云端作品集，无法再改回仅本地存储。</p>
-      <div class="delete-dialog-actions"><button class="sync-confirm-cancel" type="button">取消</button><button class="sync-confirm-submit" type="button">确认同步</button></div>
+      <h2 id="sync-confirm-title">发布作品集？</h2>
+      <p id="sync-confirm-copy">以当前本机内容创建或更新公开的只读副本。更新后，公开链接只展示当前本机相册中的照片。</p>
+      <div class="delete-dialog-actions"><button class="sync-confirm-cancel" type="button">取消</button><button class="sync-confirm-submit" type="button">发布</button></div>
     </section>
   </div>
   <div class="share-modal" aria-hidden="true">
@@ -406,12 +363,12 @@ app.innerHTML = `
       <header><div><p class="eyebrow">Share portfolio</p><h2 id="share-dialog-title">分享作品集</h2></div><button class="share-modal-close" type="button" aria-label="关闭">×</button></header>
       <div class="share-content">
         <canvas class="share-qr" width="220" height="220" aria-label="作品集分享二维码"></canvas>
-        <div class="share-copy"><strong class="share-collection-name"></strong><p>扫码或复制链接，即可打开只读作品集。</p><div class="share-link-row"><input class="share-link" type="text" readonly aria-label="分享链接"><button class="share-copy-button" type="button">复制链接</button></div></div>
+        <div class="share-copy"><strong class="share-collection-name"></strong><p>扫码或复制链接，即可打开已发布的只读作品集。</p><div class="share-link-row"><input class="share-link" type="text" readonly aria-label="分享链接"><button class="share-copy-button" type="button">复制链接</button></div><p><button class="share-publish-again" type="button">发布本机更新</button></p></div>
       </div>
     </section>
   </div>`;
 
-const el = Object.fromEntries(['photo','empty','place','coordinates','meta','picker','select','customize','collection-sync','collection-share','photo-sync','user-menu','mobile-user-menu','mobile-library-back','mobile-collection-list','mobile-collection-new','carousel-viewport','carousel-track','folio-nav','technical','export-run','export-menu','delete-current','canvas-lock','canvas-info','canvas-info-panel','canvas-info-close','canvas-sync-panel','canvas-sync-close','sync-status-body','amap-key','opencage-key','service-key-amap','service-key-opencage','crop-hint','crop-mode-control','display-modal','display-settings-list','display-modal-close','display-cancel','display-apply','user-modal','user-modal-close','user-settings-home','avatar-grid','current-avatar-upload','custom-avatar-input','custom-logo-upload','custom-logo-input','logo-library','user-done','info-modal','info-modal-close','info-form','delete-modal','delete-modal-cancel','delete-modal-confirm','sync-confirm-modal','sync-confirm-cancel','sync-confirm-submit','share-modal','share-modal-close','share-qr','share-link','share-copy-button','collection-modal','collection-settings-trigger','collection-settings-modal','collection-settings-close','collection-rename-action','collection-delete-action','collection-delete-modal','collection-delete-cancel','collection-delete-confirm','collection-trigger','collection-name','workspace-collection-name','collection-menu','collection-list','collection-form','collection-input','collection-form-cancel','collection-new'].map(c => [c, document.querySelector(`.${c}`)]));
+const el = Object.fromEntries(['photo','empty','place','coordinates','meta','picker','select','customize','collection-sync','collection-share','user-menu','mobile-user-menu','mobile-library-back','mobile-collection-list','mobile-collection-new','carousel-viewport','carousel-track','folio-nav','technical','export-run','export-menu','delete-current','canvas-lock','canvas-info','canvas-info-panel','canvas-info-close','canvas-sync-panel','canvas-sync-close','sync-status-body','amap-key','opencage-key','service-key-amap','service-key-opencage','crop-hint','crop-mode-control','display-modal','display-settings-list','display-modal-close','display-cancel','display-apply','user-modal','user-modal-close','user-settings-home','avatar-grid','current-avatar-upload','custom-avatar-input','custom-logo-upload','custom-logo-input','logo-library','user-done','info-modal','info-modal-close','info-form','delete-modal','delete-modal-cancel','delete-modal-confirm','sync-confirm-modal','sync-confirm-cancel','sync-confirm-submit','share-modal','share-modal-close','share-qr','share-link','share-copy-button','collection-modal','collection-settings-trigger','collection-settings-modal','collection-settings-close','collection-rename-action','collection-delete-action','collection-delete-modal','collection-delete-cancel','collection-delete-confirm','collection-trigger','collection-name','workspace-collection-name','collection-menu','collection-list','collection-form','collection-input','collection-form-cancel','collection-new'].map(c => [c, document.querySelector(`.${c}`)]));
 let { collections, activeId: activeCollectionId } = loadCollections(DEFAULT_DISPLAY_SETTINGS);
 let displaySettings = cloneDisplaySettings(collections.find(item => item.id === activeCollectionId)?.settings || DEFAULT_DISPLAY_SETTINGS);
 saveCollections(collections, activeCollectionId);
@@ -429,7 +386,6 @@ function saveActiveDisplaySettings() {
   if (!collection) return;
   collection.settings = cloneDisplaySettings(displaySettings);
   saveCollections(collections, activeCollectionId);
-  queueCloudMutation(`collection:${collection.id}`, 'collection-metadata', { collectionId: collection.id }, collection);
 }
 
 function closeCollectionMenu() {
@@ -559,13 +515,13 @@ function showUserPanel(name = '') {
   document.querySelectorAll('[data-user-view]').forEach(panel => {
     panel.hidden = panel.dataset.userView !== name;
   });
-  el['user-done'].textContent = name === 'account' ? '连接云端' : name === 'nickname' ? '保存' : '完成';
+  el['user-done'].textContent = name === 'nickname' ? '保存' : '完成';
   if (name === 'nickname') {
-    document.querySelector('.nickname-input').value = cloudUser?.nickname || localRepositories.profile.load()?.nickname || '';
+    document.querySelector('.nickname-input').value = localRepositories.profile.load()?.nickname || cloudUser?.nickname || '';
     document.querySelector('.nickname-note').hidden = true;
     requestAnimationFrame(() => document.querySelector('.nickname-input').focus());
   }
-  document.querySelector('.nickname-setting-current').textContent = cloudUser?.nickname || localRepositories.profile.load()?.nickname || '';
+  document.querySelector('.nickname-setting-current').textContent = localRepositories.profile.load()?.nickname || cloudUser?.nickname || '';
 }
 
 let cloudUser = null;
@@ -610,143 +566,35 @@ document.querySelector('.vip-claim').addEventListener('click', async event => {
   } catch (error) { note.textContent = error.message; note.hidden = false; }
   finally { button.disabled = false; }
 });
-let codeCooldownTimer = null;
 const syncTasks = new Map();
-const syncPhotoSnapshots = new Map();
+const pendingImports = new Map();
 let syncDetailCollectionId = activeCollectionId;
 let syncPanelMode = 'global';
-const remoteLogoAssets = new Map();
-let logoSyncPromise = null;
-let mutationFlushPromise = null;
-let mutationFlushScheduled = false;
-const collectionSyncPromises = new Map();
-localStorage.removeItem('stillfolio-hidden-cloud-logos-v1');
-
-function collectionCloudOwner(collection = activeCollection()) {
-  return collection?.cloudOwnerId || cloudUser?.id || '';
-}
-
-function queueCloudMutation(key, type, payload, collection = activeCollection()) {
-  const ownerId = collectionCloudOwner(collection);
-  if (!ownerId || collection?.storageMode !== 'cloud') return;
-  cloudMutationQueue.put(ownerId, key, type, payload);
-  setSyncTask('mutations', { kind: 'mutation', phase: 'running', current: 0, total: cloudMutationQueue.list(ownerId).length });
-  scheduleCloudMutationFlush();
-}
-
-function scheduleCloudMutationFlush() {
-  if (mutationFlushScheduled) return;
-  mutationFlushScheduled = true;
-  queueMicrotask(() => {
-    mutationFlushScheduled = false;
-    flushCloudMutations();
-  });
-}
-
-function queuePhotoMetadata(item) {
-  const collection = collections.find(value => value.id === item?.collectionId);
-  if (!item || !collection) return;
-  item.cloudSyncStatus = 'syncing';
-  queueCloudMutation(`photo:${item.id}`, 'photo-metadata', {
-    collectionId: collection.id, photoId: item.id,
-  }, collection);
-  if (collection.id === activeCollectionId) renderPhotoSyncStatus(item);
-}
-
-async function flushCloudMutations() {
-  if (!cloudUser?.id || mutationFlushPromise) return mutationFlushPromise;
-  let stoppedOnError = false;
-  mutationFlushPromise = (async () => {
-    const ownerId = cloudUser.id;
-    for (const mutation of cloudMutationQueue.list(ownerId)) {
-      try {
-        const collection = mutation.payload.collectionId
-          ? collections.find(item => item.id === mutation.payload.collectionId)
-          : null;
-        if (mutation.type === 'collection-metadata') {
-          if (!collection?.cloudId) continue;
-          await cloudSyncRepository.updateCollection(collection);
-        } else if (mutation.type === 'photo-metadata') {
-          if (!collection?.cloudId) continue;
-          const record = (await loadPhotos()).find(item => item.id === mutation.payload.photoId);
-          if (!record) { cloudMutationQueue.remove(ownerId, mutation.key, mutation.updatedAt); continue; }
-          await cloudSyncRepository.updatePhotoMetadata(collection.cloudId, record);
-          record.cloudSyncStatus = 'success';
-          record.cloudUpdatedAt = Date.now();
-          await savePhoto(record);
-          const visible = photos.find(item => item.id === record.id);
-          if (visible) {
-            visible.cloudSyncStatus = 'success';
-            visible.cloudUpdatedAt = record.cloudUpdatedAt;
-            renderPhotoSyncStatus(visible);
-          }
-        } else if (mutation.type === 'candidates') {
-          if (!collection?.cloudId) continue;
-          await cloudSyncRepository.syncCandidates(collection.cloudId, mutation.payload.candidates);
-        } else if (mutation.type === 'delete-photo') {
-          await cloudSyncRepository.deleteSource('photo', mutation.payload.sourceId);
-        } else if (mutation.type === 'delete-logo') {
-          await cloudSyncRepository.deleteSource('logo', mutation.payload.sourceId);
-        } else if (mutation.type === 'delete-collection') {
-          await cloudSyncRepository.deleteCollection(mutation.payload.cloudId);
-        }
-        cloudMutationQueue.remove(ownerId, mutation.key, mutation.updatedAt);
-      } catch (error) {
-        if (mutation.type === 'photo-metadata') {
-          const visible = photos.find(item => item.id === mutation.payload.photoId);
-          if (visible) { visible.cloudSyncStatus = 'failed'; renderPhotoSyncStatus(visible); }
-        }
-        setSyncTask('mutations', { kind: 'collection', phase: 'error', error: error.message });
-        stoppedOnError = true;
-        break;
-      }
-    }
-    if (!cloudMutationQueue.list(ownerId).length) setSyncTask('mutations', { kind: 'collection', phase: 'success', total: 0 });
-  })().finally(() => {
-    mutationFlushPromise = null;
-    if (!stoppedOnError && cloudUser?.id && cloudMutationQueue.list(cloudUser.id).length) {
-      queueMicrotask(() => flushCloudMutations());
-    }
-  });
-  return mutationFlushPromise;
-}
+let remoteAlbums = [];
+let remoteAlbumsMessage = '';
+let remoteAlbumsRequest;
 
 function renderUserIdentity() {
-  const cloud = Boolean(cloudUser?.id);
-  if (cloud) localStorage.setItem('stillfolio-last-cloud-owner-id', String(cloudUser.id));
   const localProfile = localRepositories.profile.load();
-  document.querySelectorAll('.profile-tier').forEach(node => { node.textContent = cloud ? '云端用户' : '本地用户'; });
-  const nickname = cloudUser?.nickname || localProfile?.nickname;
-  if (nickname) document.querySelectorAll('.profile-nickname').forEach(node => { node.textContent = nickname; });
-  const summary = document.querySelector('.account-summary-copy');
-  if (summary) summary.textContent = cloud
-    ? cloudUser.login_methods?.includes('sermo') ? `已连接 Sermo · ${cloudUser.phone ? '已验证手机号' : '未设置手机号'}` : '账户已连接，云端作品集可跨设备访问'
-    : '资料与作品集仅保存在当前设备';
-  const entry = document.querySelector('.account-entry');
-  if (entry) entry.hidden = cloud;
-  const logout = document.querySelector('.account-logout');
-  if (logout) logout.hidden = !cloud;
-  const logoDescription = document.querySelector('.logo-settings-description');
-  if (logoDescription) logoDescription.textContent = cloud ? '添加并自动同步我的 LOGO' : '添加并管理当前设备的 LOGO';
+  document.querySelectorAll('.profile-tier').forEach(node => { node.textContent = cloudUser ? '已登录友间' : '本机工作区'; });
+  document.querySelectorAll('.profile-nickname').forEach(node => { node.textContent = localProfile?.nickname || cloudUser?.nickname || '留幅用户'; });
+  document.querySelector('.account-summary-copy').textContent = cloudUser
+    ? '相册保存在本机，可手动发布云端副本'
+    : '本机相册可离线使用，登录友间后可发布';
+  document.querySelector('.account-entry').hidden = Boolean(cloudUser);
+  document.querySelector('.account-logout').hidden = !cloudUser;
   renderSyncStatus();
 }
 
 function setSyncTask(key, next) {
-  debugLog('同步进度更新', {kind: next.kind, phase: next.phase, current: next.current, total: next.total});
-  syncTasks.set(key, { ...(syncTasks.get(key) || {}), ...next });
+  syncTasks.set(key, next);
   renderSyncStatus();
 }
 
 function taskProgress(task) {
-  if (!task) return '';
-  if (task.phase === 'error') return task.error || '同步失败';
-  if (task.phase === 'success') return task.kind === 'collection' && task.total
-    ? `已同步 ${task.current ?? task.total}/${task.total} 张照片`
-    : task.total ? `已同步 ${task.total} 项` : '已是最新';
-  if (task.kind === 'mutation') return '正在同步本地修改';
-  if (task.action === 'delete') return task.kind === 'logo' ? '正在永久删除 LOGO' : '正在永久删除图片';
-  if (task.kind === 'logo') return `正在${task.direction === 'download' ? '下载' : '上传'}第 ${task.current}/${task.total} 个 LOGO`;
-  return `正在${task.direction === 'download' ? '下载' : '上传'}第 ${task.current}/${task.total} 张图片`;
+  if (task.phase === 'error') return task.error;
+  if (task.phase === 'success') return task.message || '已发布';
+  return task.total ? `${task.message} · ${task.current}/${task.total}` : task.message;
 }
 
 function renderSyncStatus() {
@@ -755,392 +603,153 @@ function renderSyncStatus() {
   document.querySelectorAll('.global-sync').forEach(button => {
     button.classList.toggle('syncing', running);
     button.classList.toggle('sync-error', failed);
-    button.title = running ? '正在同步' : failed ? '同步失败，点击查看' : '云端同步状态';
+    button.title = '云端副本';
   });
   const collection = activeCollection();
-  const collectionTask = collection && syncTasks.get(`collection:${collection.id}`);
-  const visibleCollectionRecords = collection ? (syncPhotoSnapshots.get(collection.id) || (collection.id === activeCollectionId ? photos : [])) : [];
-  const collectionFullySynced = !visibleCollectionRecords.length || visibleCollectionRecords.every(item => item.cloudSyncStatus === 'success');
-  el['collection-sync'].classList.toggle('syncing', collectionTask?.phase === 'running');
-  el['collection-sync'].classList.toggle('sync-error', collectionTask?.phase === 'error');
-  el['collection-sync'].classList.toggle('synced', collection?.storageMode === 'cloud' && collectionFullySynced && collectionTask?.phase !== 'running' && collectionTask?.phase !== 'error');
-  el['collection-sync'].title = collectionTask?.phase === 'running' ? '查看作品集同步进度' : collection?.storageMode === 'cloud' ? '查看云端同步状态' : '将作品集同步到云端';
-  el['collection-share'].hidden = collection?.storageMode !== 'cloud';
-  if (!cloudUser) {
-    el['sync-status-body'].innerHTML = '<p class="sync-empty">连接云端账户后，可自动同步 LOGO，并手动同步作品集。</p>';
+  const task = syncTasks.get(collection?.id);
+  el['collection-sync'].classList.toggle('syncing', task?.phase === 'running');
+  el['collection-sync'].classList.toggle('sync-error', task?.phase === 'error');
+  el['collection-sync'].classList.toggle('synced', Boolean(collection?.sharePath));
+  el['collection-sync'].title = '发布到云端';
+  el['collection-share'].hidden = false;
+
+  const detail = collections.find(item => item.id === syncDetailCollectionId);
+  const detailTask = syncTasks.get(detail?.id);
+  if (syncPanelMode === 'collection' && detail) {
+    el['sync-status-body'].innerHTML = `<section class="sync-row">
+      <div><strong>${escapeHtml(detail.name)}</strong><small role="status">${escapeHtml(detailTask ? taskProgress(detailTask) : '相册编辑保存在本机')}</small></div>
+      <button type="button" data-sync-collection="${escapeHtml(detail.id)}" ${detailTask?.phase === 'running' ? 'disabled' : ''}>${cloudUser ? '发布' : '友间登录'}</button>
+    </section>`;
     return;
   }
-  const logoTask = syncTasks.get('logos');
-  const mutationTask = syncTasks.get('mutations');
-  const detailCollection = collections.find(item => item.id === syncDetailCollectionId && !item.cloudDeleted) || collection;
-  const activeRecords = detailCollection ? (syncPhotoSnapshots.get(detailCollection.id) || (detailCollection.id === activeCollectionId ? photos : [])) : [];
-  const syncedCount = activeRecords.filter(item => item.cloudSyncStatus === 'success').length;
-  const detailTask = detailCollection && syncTasks.get(`collection:${detailCollection.id}`);
-  const detailRunning = detailTask?.phase === 'running';
-  const autoSyncControl = detailCollection?.storageMode === 'cloud' ? `<label class="collection-auto-sync"><input type="checkbox" data-auto-sync-collection="${escapeHtml(detailCollection.id)}" ${detailCollection.autoSyncNewPhotos !== false ? 'checked' : ''}><span>自动同步新添加的照片</span></label>` : '';
-  const collectionDetail = detailCollection?.storageMode === 'cloud' ? `<section class="collection-sync-detail${syncPanelMode === 'collection' && !detailRunning ? ' compact' : ''}">
-      ${syncPanelMode === 'collection' && !detailRunning && detailTask?.phase !== 'error' ? autoSyncControl : `
-      <div class="collection-sync-summary"><div><strong>${escapeHtml(detailCollection.name)}</strong><small>${syncedCount}/${activeRecords.length} 张照片已同步</small></div><span>${activeRecords.length ? Math.round(syncedCount / activeRecords.length * 100) : 100}%</span></div>
-      <i style="--sync-progress:${activeRecords.length ? Math.round(syncedCount / activeRecords.length * 100) : 100}%"></i>
-      ${autoSyncControl}
-      <div class="collection-photo-progress">${activeRecords.length ? activeRecords.map((item, index) => {
-        const status = item.cloudSyncStatus || 'pending';
-        const label = { success: '已同步', syncing: '上传中', failed: '同步失败', pending: '等待同步' }[status] || '等待同步';
-        return `<div class="collection-photo-sync-row" data-status="${status}"><span>${String(index + 1).padStart(2, '0')}</span><strong>${escapeHtml(item.file?.name || `照片 ${index + 1}`)}</strong><small>${label}</small></div>`;
-      }).join('') : '<p class="sync-empty">这个作品集还没有照片。</p>'}</div>`}
-    </section>` : '';
-  const collectionRows = collections.filter(collection => !collection.cloudDeleted).map(collection => {
-    const task = syncTasks.get(`collection:${collection.id}`);
-    const runningTask = task?.phase === 'running';
-    const status = task ? taskProgress(task) : collection.storageMode === 'cloud' ? '云端作品集' : '等待手动同步';
-    return `<section class="sync-row${task?.phase === 'error' ? ' error' : ''}">
-      <div><strong>${escapeHtml(collection.name)}</strong><small>${escapeHtml(status)}</small></div>
-      <div class="sync-row-actions"><button type="button" data-sync-collection="${escapeHtml(collection.id)}">${runningTask ? '查看进度' : collection.storageMode === 'cloud' ? '查看' : '同步'}</button>${collection.storageMode === 'cloud' ? `<button type="button" data-delete-cloud-collection="${escapeHtml(collection.id)}">删除</button>` : ''}</div>
-      ${runningTask ? `<i style="--sync-progress:${Math.round((task.current / Math.max(1, task.total)) * 100)}%"></i>` : ''}
+  const list = remoteAlbums.map(album => {
+    const status = syncTasks.get(album.id);
+    const busy = status?.phase === 'running' ? 'disabled' : '';
+    return `<section class="sync-row">
+      <div><strong>${escapeHtml(album.name)}</strong><small role="status">${escapeHtml(status ? taskProgress(status) : album.share_path ? '已有公开链接' : '云端副本')}</small></div>
+      <div class="sync-row-actions">
+        <button type="button" data-import-album="${escapeHtml(album.id)}" ${busy}>下载到本机</button>
+        ${album.share_path ? `<button type="button" data-revoke-album="${escapeHtml(album.id)}" ${busy}>撤销链接</button>` : ''}
+      </div>
     </section>`;
   }).join('');
-  el['sync-status-body'].innerHTML = `
-    ${collectionDetail}
-    ${syncPanelMode === 'collection' ? '' : `
-    ${mutationTask?.phase === 'error' ? `<section class="sync-row error"><div><strong>待同步修改</strong><small>${escapeHtml(taskProgress(mutationTask))}</small></div><button type="button" data-sync-mutations>重试</button></section>` : ''}
-    <section class="sync-row sync-logo-row${logoTask?.phase === 'error' ? ' error' : ''}">
-      <div><strong>我的 LOGO</strong><small>${escapeHtml(logoTask ? taskProgress(logoTask) : '自动同步')}</small></div>
-      ${logoTask?.phase === 'error' ? '<button type="button" data-sync-logos>重试</button>' : '<span>自动</span>'}
-      ${logoTask?.phase === 'running' ? `<i style="--sync-progress:${Math.round((logoTask.current / Math.max(1, logoTask.total)) * 100)}%"></i>` : ''}
-    </section>${collectionRows}`}`;
+  el['sync-status-body'].innerHTML = cloudUser
+    ? `<section class="sync-row"><div><strong>云端副本</strong><small role="status">${escapeHtml(remoteAlbumsMessage || '下载时另存为一个本机相册')}</small></div><button type="button" data-refresh-albums>刷新</button></section>${list}`
+    : '<section class="sync-row"><div><strong>云端副本</strong><small>登录后可发布、分享或下载。</small></div><button type="button" data-cloud-signin>友间登录</button></section>';
 }
 
-function renderPhotoSyncStatus(item = photos[current]) {
-  const cloudCollection = activeCollection()?.storageMode === 'cloud';
-  el['photo-sync'].hidden = !cloudCollection || !item;
-  if (!cloudCollection || !item) return;
-  const status = item.cloudSyncStatus || 'pending';
-  el['photo-sync'].dataset.status = status;
-  const labels = { syncing: '当前照片正在同步', failed: '当前照片同步失败', success: '当前照片已同步', pending: '当前照片等待同步' };
-  el['photo-sync'].title = labels[status] || labels.success;
-  el['photo-sync'].setAttribute('aria-label', el['photo-sync'].title);
+function openCloudSignIn() {
+  closeSyncPanel();
+  openUserModal();
+  showUserPanel('account');
 }
 
-async function syncLogos() {
-  if (!cloudUser) return;
-  if (logoSyncPromise) return logoSyncPromise;
-  logoSyncPromise = (async () => {
+async function refreshRemoteAlbums() {
+  if (!cloudUser || remoteAlbumsRequest) return remoteAlbumsRequest;
+  if (!navigator.onLine) {
+    remoteAlbumsMessage = '当前离线，请联网后刷新';
+    renderSyncStatus();
+    return;
+  }
+  const owner = cloudUser.id;
+  remoteAlbumsMessage = '正在读取云端副本…';
+  renderSyncStatus();
+  remoteAlbumsRequest = (async () => {
     try {
-      const remote = await cloudSyncRepository.listLogos();
-      const pendingLogoDeletes = new Set(cloudMutationQueue.list(cloudUser.id)
-        .filter(item => item.type === 'delete-logo').map(item => item.payload.sourceId));
-      const visibleRemote = remote.filter(asset => !pendingLogoDeletes.has(asset.source_id));
-      remoteLogoAssets.clear();
-      visibleRemote.forEach(asset => remoteLogoAssets.set(asset.source_id, asset));
-      const localIds = new Set(customLogos.map(logo => logo.id));
-      const uploads = customLogos.filter(logo => !pendingLogoDeletes.has(logo.id) && !remoteLogoAssets.has(logo.id));
-      const downloads = visibleRemote.filter(asset => !localIds.has(asset.source_id));
-      const total = uploads.length + downloads.length;
-      setSyncTask('logos', { kind: 'logo', phase: total ? 'running' : 'success', current: 0, total });
-      let current = 0;
-      for (const logo of uploads) {
-        setSyncTask('logos', { direction: 'upload', current: current + 1 });
-        const asset = await cloudSyncRepository.uploadLogo(logo.id, logo.blob);
-        remoteLogoAssets.set(logo.id, asset);
-        current += 1;
-      }
-      for (const asset of downloads) {
-        setSyncTask('logos', { direction: 'download', current: current + 1 });
-        const blob = await cloudSyncRepository.downloadAsset(asset);
-        await saveAsset(asset.source_id, blob);
-        customLogos.push({ id: asset.source_id, blob, url: URL.createObjectURL(blob) });
-        remoteLogoAssets.set(asset.source_id, asset);
-        current += 1;
-      }
-      renderLogoLibrary();
-      setSyncTask('logos', { phase: 'success', current: total, total });
+      const albums = await cloudSyncRepository.listCollections();
+      if (cloudUser?.id !== owner) return;
+      remoteAlbums = albums;
+      remoteAlbumsMessage = albums.length ? '' : '暂无云端副本';
     } catch (error) {
-      setSyncTask('logos', { kind: 'logo', phase: 'error', error: error.message });
+      if (cloudUser?.id === owner) remoteAlbumsMessage = error.message;
     } finally {
-      logoSyncPromise = null;
+      remoteAlbumsRequest = null;
+      renderSyncStatus();
     }
   })();
-  return logoSyncPromise;
+  return remoteAlbumsRequest;
 }
 
-function remotePhotoName(asset) {
-  if (asset.metadata?.fileName) return asset.metadata.fileName;
-  const tail = String(asset.source_id || '').split(':').slice(1, -2).join(':');
-  return tail || `photograph-${asset.id}`;
+function ensureCloudOwner(owner) {
+  if (cloudUser?.id !== owner || cloudAccountRepository.user?.id !== owner) throw new Error('请重新登录友间后重试');
 }
 
-async function restoreCloudCollections() {
-  if (!cloudUser) return [];
-  let remoteCollections;
+async function downloadRemoteAlbum(album) {
+  const owner = cloudUser?.id;
+  if (!owner || syncTasks.get(album.id)?.phase === 'running') return;
   try {
-    remoteCollections = await cloudSyncRepository.listCollections();
-    const pendingCollectionDeletes = new Set(cloudMutationQueue.list(cloudUser.id)
-      .filter(item => item.type === 'delete-collection').map(item => item.payload.cloudId));
-    remoteCollections = remoteCollections.filter(item => !pendingCollectionDeletes.has(item.id));
-  } catch (error) {
-    setSyncTask('collections:restore', { kind: 'collection', direction: 'download', phase: 'error', error: error.message });
-    return [];
-  }
-  const localPhotos = await loadPhotos();
-  const localPhotoIds = new Set(localPhotos.map(photo => photo.id));
-  const localPhotoMap = new Map(localPhotos.map(photo => [photo.id, photo]));
-  let changed = false;
-
-  for (const remote of remoteCollections) {
-    let collection = collections.find(item => item.id === remote.client_id);
-    if (!collection) {
-      collection = createCollection(remote.name, remote.display_settings, remote.client_id);
-      collections.push(collection);
-      changed = true;
+    setSyncTask(album.id, { phase: 'running', message: '正在下载' });
+    const collection = await restoreAlbumCopy(album, (current, total) => {
+      setSyncTask(album.id, { phase: 'running', message: '正在下载', current, total });
+    }, () => ensureCloudOwner(owner), downloaded => {
+      const next = [...collections, downloaded];
+      saveCollections(next, activeCollectionId);
+      collections = next;
+    });
+    setSyncTask(album.id, { phase: 'success', message: '已另存到本机' });
+    const logoId = collection.settings.customLogoId;
+    if (collection.settings.customLogoEnabled && logoId && !customLogos.some(logo => logo.id === logoId)) {
+      const blob = await loadAsset(logoId);
+      if (blob) customLogos.push({ id: logoId, blob, url: URL.createObjectURL(blob) });
     }
-    const hasPendingCollectionUpdate = cloudMutationQueue.has(cloudUser.id, `collection:${collection.id}`);
-    if (!hasPendingCollectionUpdate) {
-      collection.name = remote.name;
-      collection.description = remote.description || '';
-      collection.photoOrder = Array.isArray(remote.photo_order) ? remote.photo_order : [];
-      collection.photoColors = remote.photo_colors || {};
-      collection.settings = cloneDisplaySettings(remote.display_settings || DEFAULT_DISPLAY_SETTINGS);
-    }
-    collection.cloudId = remote.id;
-    collection.sharePath = remote.share_path || collection.sharePath || '';
-    collection.cloudOwnerId = cloudUser.id;
-    collection.storageMode = 'cloud';
-    collection.cloudDeleted = false;
-    collection.createdAt = Number.isFinite(Date.parse(remote.created_at)) ? Date.parse(remote.created_at) : collection.createdAt;
-
-    if (!cloudMutationQueue.has(cloudUser.id, `candidates:${collection.id}`)) {
-      const candidates = { camera: [], location: [] };
-      for (const candidate of Array.isArray(remote.candidates) ? remote.candidates : []) {
-        if (candidate?.kind in candidates && candidate.payload) candidates[candidate.kind].push(candidate.payload);
-      }
-      localStorage.setItem(`metadata-candidates-v2:${collection.id}`, JSON.stringify(candidates));
-    }
-
-    const assets = Array.isArray(remote.photos) ? remote.photos : [];
-    const remotePhotoIds = new Set(assets.map(asset => asset.source_id));
-    for (const record of localPhotos.filter(item => item.collectionId === collection.id && item.cloudSyncStatus === 'success')) {
-      const hasPendingChange = cloudMutationQueue.has(cloudUser.id, `photo:${record.id}`)
-        || cloudMutationQueue.has(cloudUser.id, `delete-photo:${record.id}`);
-      if (!remotePhotoIds.has(record.id) && !hasPendingChange && !record.cloudDeleted) {
-        record.cloudDeleted = true;
-        await savePhoto(record);
-      }
-    }
-    for (const asset of assets) {
-      const record = localPhotoMap.get(asset.source_id);
-      if (!record || cloudMutationQueue.has(cloudUser.id, `photo:${asset.source_id}`)) continue;
-      const remoteUpdatedAt = Date.parse(asset.updated_at) || 0;
-      if (record.cloudDeleted) {
-        record.cloudDeleted = false;
-        await savePhoto(record);
-      }
-      if (remoteUpdatedAt <= (record.cloudUpdatedAt || 0)) continue;
-      const metadata = asset.metadata || {};
-      Object.assign(record, {
-        width: Number(metadata.width) || record.width,
-        height: Number(metadata.height) || record.height,
-        exif: metadata.exif || {}, places: metadata.places || {}, place: metadata.place || '',
-        placeEdited: Boolean(metadata.placeEdited), placeEditedByService: metadata.placeEditedByService || {},
-        placeService: metadata.placeService || '', locationSource: metadata.locationSource || '',
-        cropX: Number.isFinite(metadata.cropX) ? metadata.cropX : 50,
-        cropY: Number.isFinite(metadata.cropY) ? metadata.cropY : 50,
-        cropMode: metadata.cropMode || 'window', cloudSyncStatus: 'success', cloudUpdatedAt: remoteUpdatedAt,
-        cloudDeleted: false,
-      });
-      await savePhoto(record);
-    }
-    const missing = assets.filter(asset => !localPhotoIds.has(asset.source_id)
-      && !cloudMutationQueue.has(cloudUser.id, `delete-photo:${asset.source_id}`));
-    const key = `collection:${collection.id}`;
-    if (missing.length) setSyncTask(key, { kind: 'collection', direction: 'download', phase: 'running', current: 0, total: missing.length });
-    try {
-      for (let index = 0; index < missing.length; index += 1) {
-        const asset = missing[index];
-        setSyncTask(key, { direction: 'download', current: index + 1 });
-        const blob = await cloudSyncRepository.downloadAsset(asset);
-        const metadata = asset.metadata || {};
-        const file = new File([blob], remotePhotoName(asset), {
-          type: asset.mime_type || blob.type || 'application/octet-stream',
-          lastModified: Number(metadata.lastModified) || Date.now(),
-        });
-        await savePhoto({
-          id: asset.source_id,
-          collectionId: collection.id,
-          file,
-          width: Number(metadata.width) || 0,
-          height: Number(metadata.height) || 0,
-          exif: metadata.exif || {},
-          places: metadata.places || {},
-          place: metadata.place || '',
-          placeEdited: Boolean(metadata.placeEdited),
-          placeEditedByService: metadata.placeEditedByService || {},
-          placeService: metadata.placeService || '',
-          locationSource: metadata.locationSource || '',
-          cropX: Number.isFinite(metadata.cropX) ? metadata.cropX : 50,
-          cropY: Number.isFinite(metadata.cropY) ? metadata.cropY : 50,
-          cropMode: metadata.cropMode || 'window',
-          cloudSyncStatus: 'success',
-          cloudUpdatedAt: Date.parse(asset.updated_at) || Date.now(),
-          cloudDeleted: false,
-          createdAt: Number(metadata.createdAt) || Date.now(),
-        });
-        localPhotoIds.add(asset.source_id);
-      }
-      if (missing.length) setSyncTask(key, { direction: 'download', phase: 'success', current: missing.length, total: missing.length });
-    } catch (error) {
-      setSyncTask(key, { kind: 'collection', direction: 'download', phase: 'error', error: error.message });
-    }
-  }
-
-  const remoteClientIds = new Set(remoteCollections.map(item => item.client_id));
-  for (const collection of collections.filter(item => item.storageMode === 'cloud' && String(item.cloudOwnerId) === String(cloudUser.id))) {
-    const pending = cloudMutationQueue.has(cloudUser.id, `collection:${collection.id}`)
-      || cloudMutationQueue.has(cloudUser.id, `delete-collection:${collection.id}`);
-    if (!remoteClientIds.has(collection.id) && !pending) collection.cloudDeleted = true;
-  }
-  if (!collections.some(item => !item.cloudDeleted)) collections.push(createCollection('未命名作品集', DEFAULT_DISPLAY_SETTINGS));
-  if (!collections.some(item => item.id === activeCollectionId && !item.cloudDeleted)) {
-    activeCollectionId = collections.find(item => !item.cloudDeleted).id;
-    changed = true;
-  }
-
-  if (remoteCollections.length || changed) {
-    saveCollections(collections, activeCollectionId);
-    const active = activeCollection();
-    displaySettings = cloneDisplaySettings(active?.settings || DEFAULT_DISPLAY_SETTINGS);
-    geoService = displaySettings.locationService;
     renderCollections();
-  }
-  return remoteCollections;
-}
-
-function setPhotoCloudStatus(record, status, updatedAt = record.cloudUpdatedAt) {
-  record.cloudSyncStatus = status;
-  record.cloudUpdatedAt = updatedAt;
-  const visible = photos.find(photo => photo.id === record.id);
-  if (visible && visible !== record) {
-    visible.cloudSyncStatus = status;
-    visible.cloudUpdatedAt = updatedAt;
-  }
-  for (const snapshot of syncPhotoSnapshots.values()) {
-    const snapshotRecord = snapshot.find(item => item.id === record.id);
-    if (!snapshotRecord || snapshotRecord === record) continue;
-    snapshotRecord.cloudSyncStatus = status;
-    snapshotRecord.cloudUpdatedAt = updatedAt;
-  }
-}
-
-async function uploadCollectionRecords(collection, allRecords, pendingRecords) {
-  debugLog('上传队列准备', {total: allRecords.length, pending: pendingRecords.length});
-  const key = `collection:${collection.id}`;
-  try {
-  syncPhotoSnapshots.set(collection.id, allRecords);
-  for (const record of pendingRecords) {
-    setPhotoCloudStatus(record, 'syncing');
-    try { await savePhoto(record); }
-    catch (error) { debugLog('上传前状态保存失败，继续检查原文件', debugError(error)); }
-  }
-  let completed = allRecords.filter(record => record.cloudSyncStatus === 'success').length;
-  setSyncTask(key, { kind: 'collection', direction: 'upload', phase: pendingRecords.length ? 'running' : 'success', current: completed, total: allRecords.length });
-  for (const record of pendingRecords) {
-    try {
-      debugLog('开始上传下一张', {number: completed + 1, total: allRecords.length, bytes: record.file?.size});
-      const asset = await cloudSyncRepository.uploadPhoto(collection.cloudId, record);
-      setPhotoCloudStatus(record, 'success', Date.parse(asset.updated_at) || Date.now());
-      await savePhoto(record);
-      completed += 1;
-      setSyncTask(key, { current: completed });
-      if (cloudUser) cloudMutationQueue.remove(cloudUser.id, `photo:${record.id}`);
-    } catch (error) {
-      setPhotoCloudStatus(record, 'failed');
-      for (const waiting of pendingRecords) if (waiting.cloudSyncStatus === 'syncing') setPhotoCloudStatus(waiting, 'pending');
-      setSyncTask(key, { phase: 'error', error: error.message, current: completed, total: allRecords.length });
-      renderPhotoSyncStatus();
-      try { await savePhoto(record); }
-      catch (saveError) { debugLog('失败状态未能写入本地，已退出上传', debugError(saveError)); }
-      return false;
-    }
-  }
-  completed = allRecords.filter(record => record.cloudSyncStatus === 'success').length;
-  setSyncTask(key, { phase: 'success', current: completed, total: allRecords.length });
-  renderPhotoSyncStatus();
-  return true;
+    await switchCollection(collection.id);
   } catch (error) {
-    for (const record of pendingRecords) if (record.cloudSyncStatus === 'syncing') setPhotoCloudStatus(record, 'pending');
-    setSyncTask(key, {kind: 'collection', phase: 'error', error: error.message || '同步失败，请重新选择原照片', total: allRecords.length});
-    renderPhotoSyncStatus();
-    return false;
+    setSyncTask(album.id, { phase: 'error', error: error.message });
+    if (!cloudAccountRepository.user) restoreAccount();
+  }
+}
+
+async function revokeRemoteAlbum(album) {
+  const owner = cloudUser?.id;
+  if (!owner || !window.confirm(`撤销“${album.name}”的公开链接？云端副本仍可下载。`)) return;
+  try {
+    setSyncTask(album.id, { phase: 'running', message: '正在撤销链接' });
+    ensureCloudOwner(owner);
+    await cloudSyncRepository.revokeShare(album.id);
+    ensureCloudOwner(owner);
+    album.share_path = '';
+    for (const collection of collections) {
+      if (collection.cloudId === album.id) collection.sharePath = '';
+    }
+    saveCollections(collections, activeCollectionId);
+    setSyncTask(album.id, { phase: 'success', message: '链接已撤销' });
+    if (photos.length) updateDisplaySlots(photos[current]);
+  } catch (error) {
+    setSyncTask(album.id, { phase: 'error', error: error.message });
+    if (!cloudAccountRepository.user) restoreAccount();
   }
 }
 
 async function syncCollectionToCloud(collectionId) {
-  if (!cloudUser) return;
-  if (collectionSyncPromises.has(collectionId)) return collectionSyncPromises.get(collectionId);
+  const owner = cloudUser?.id;
   const collection = collections.find(item => item.id === collectionId);
-  if (!collection) return;
-  const task = (async () => {
-    const records = (await loadPhotos()).filter(photo => photo.collectionId === collection.id);
-    setSyncTask(`collection:${collection.id}`, { kind: 'collection', direction: 'upload', phase: 'running', current: 0, total: records.length });
-    const remote = await cloudSyncRepository.syncCollection(collection);
-    collection.cloudId = remote.id;
-    collection.cloudOwnerId = cloudUser.id;
-    collection.storageMode = 'cloud';
-    collection.autoSyncNewPhotos = collection.autoSyncNewPhotos !== false;
-    saveCollections(collections, activeCollectionId);
-    renderSyncStatus();
-    const remoteIds = new Set((remote.photos || []).map(asset => asset.source_id));
-    for (const record of records.filter(item => remoteIds.has(item.id))) {
-      setPhotoCloudStatus(record, 'success', record.cloudUpdatedAt || Date.now());
-      await savePhoto(record);
-    }
-    const pendingRecords = records.filter(record => !remoteIds.has(record.id));
-    syncPhotoSnapshots.set(collection.id, records);
-    renderSyncStatus();
-    const candidates = loadInfoCandidatesFor(collection.id);
-    await cloudSyncRepository.syncCandidates(remote.id, candidates);
-    const completed = await uploadCollectionRecords(collection, records, pendingRecords);
-    if (completed) {
-      cloudMutationQueue.remove(cloudUser.id, `collection:${collection.id}`);
-      cloudMutationQueue.remove(cloudUser.id, `candidates:${collection.id}`);
-    }
-  })().catch(error => {
-    setSyncTask(`collection:${collection.id}`, { kind: 'collection', phase: 'error', error: error.message });
-  }).finally(() => collectionSyncPromises.delete(collectionId));
-  collectionSyncPromises.set(collectionId, task);
-  return task;
-}
-
-async function uploadNewPhotosToCloud(collection, items) {
-  if (!cloudUser || !collection?.cloudId || !items.length) return;
-  const running = collectionSyncPromises.get(collection.id);
-  if (running) {
-    await running;
-    return uploadNewPhotosToCloud(collection, items);
-  }
-  const task = (async () => {
+  if (!owner || !collection || syncTasks.get(collection.id)?.phase === 'running') return;
+  setSyncTask(collectionId, { phase: 'running', message: '正在准备发布' });
+  openSyncPanel(collectionId, 'collection');
+  try {
+    if (!navigator.onLine) throw new Error('当前离线。联网后可重新发布，本机相册已保留。');
+    await pendingImports.get(collection.id);
     const records = (await loadPhotos()).filter(photo => photo.collectionId === collection.id && !photo.cloudDeleted);
-    const ids = new Set(items.map(item => item.id));
-    await uploadCollectionRecords(collection, records, records.filter(record => ids.has(record.id) && record.cloudSyncStatus !== 'success'));
-  })().finally(() => collectionSyncPromises.delete(collection.id));
-  collectionSyncPromises.set(collection.id, task);
-  return task;
-}
-
-async function resumeInterruptedCollectionUploads(remoteCollections = []) {
-  if (!cloudUser) return;
-  const records = await loadPhotos();
-  const remoteByClientId = new Map(remoteCollections.map(collection => [collection.client_id, collection]));
-  for (const collection of collections.filter(item => item.storageMode === 'cloud' && String(item.cloudOwnerId) === String(cloudUser.id))) {
-    const collectionRecords = records.filter(item => item.collectionId === collection.id && !item.cloudDeleted);
-    const interrupted = collectionRecords.filter(item => ['syncing', 'failed'].includes(item.cloudSyncStatus));
-    if (!interrupted.length) continue;
-    const remoteIds = new Set((remoteByClientId.get(collection.id)?.photos || []).map(asset => asset.source_id));
-    for (const record of interrupted.filter(item => remoteIds.has(item.id))) {
-      setPhotoCloudStatus(record, 'success', record.cloudUpdatedAt || Date.now());
-      await savePhoto(record);
+    const snapshot = structuredClone(collection);
+    const logo = snapshot.settings.customLogoEnabled && customLogos.find(item => item.id === snapshot.settings.customLogoId);
+    const share = await publishAlbum(snapshot, records, loadInfoCandidatesFor(collectionId), logo, (current, total) => {
+      setSyncTask(collectionId, { phase: 'running', message: '正在发布', current, total });
+    }, () => ensureCloudOwner(owner));
+    ensureCloudOwner(owner);
+    collection.cloudId = share.id;
+    collection.cloudOwnerId = owner;
+    collection.sharePath = share.path;
+    saveCollections(collections, activeCollectionId);
+    setSyncTask(collectionId, { phase: 'success' });
+    if (activeCollectionId === collectionId) {
+      if (photos.length) updateDisplaySlots(photos[current]);
+      closeSyncPanel();
+      await showShareLink(collection);
     }
-    const remaining = interrupted.filter(item => !remoteIds.has(item.id));
-    if (remaining.length) uploadNewPhotosToCloud(collection, remaining);
+  } catch (error) {
+    setSyncTask(collectionId, { phase: 'error', error: error.message });
+    if (!cloudAccountRepository.user) restoreAccount();
   }
 }
 
@@ -1150,13 +759,6 @@ function closeSyncPanel() {
   el['canvas-sync-panel'].setAttribute('aria-hidden', 'true');
   document.querySelectorAll('.global-sync').forEach(button => button.setAttribute('aria-expanded', 'false'));
   el['collection-sync'].setAttribute('aria-expanded', 'false');
-}
-
-async function refreshCollectionSyncSnapshot(collectionId = activeCollectionId) {
-  const records = (await loadPhotos()).filter(item => item.collectionId === collectionId && !item.cloudDeleted);
-  syncPhotoSnapshots.set(collectionId, records);
-  renderSyncStatus();
-  return records;
 }
 
 function openSyncPanel(collectionId = activeCollectionId, mode = 'global') {
@@ -1169,7 +771,8 @@ function openSyncPanel(collectionId = activeCollectionId, mode = 'global') {
   el['canvas-sync-panel'].setAttribute('aria-hidden', 'false');
   document.querySelectorAll('.global-sync').forEach(target => target.setAttribute('aria-expanded', String(mode === 'global')));
   el['collection-sync'].setAttribute('aria-expanded', String(mode === 'collection'));
-  refreshCollectionSyncSnapshot(collectionId);
+  renderSyncStatus();
+  if (mode === 'global') refreshRemoteAlbums();
 }
 
 document.querySelectorAll('.global-sync').forEach(button => button.addEventListener('click', () => {
@@ -1178,35 +781,20 @@ document.querySelectorAll('.global-sync').forEach(button => button.addEventListe
 }));
 el['canvas-sync-close'].addEventListener('click', closeSyncPanel);
 el['sync-status-body'].addEventListener('click', event => {
-  const collectionButton = event.target.closest('[data-sync-collection]');
-  if (collectionButton) requestCollectionSync(collectionButton.dataset.syncCollection);
-  const deleteButton = event.target.closest('[data-delete-cloud-collection]');
-  if (deleteButton) openCollectionDeleteConfirmation(deleteButton.dataset.deleteCloudCollection);
-  if (event.target.closest('[data-sync-mutations]')) flushCloudMutations();
-  if (event.target.closest('[data-sync-logos]')) syncLogos();
-});
-el['sync-status-body'].addEventListener('change', async event => {
-  const checkbox = event.target.closest('[data-auto-sync-collection]');
-  if (!checkbox) return;
-  const collection = collections.find(item => item.id === checkbox.dataset.autoSyncCollection);
-  if (!collection) return;
-  collection.autoSyncNewPhotos = checkbox.checked;
-  saveCollections(collections, activeCollectionId);
-  if (checkbox.checked && cloudUser) {
-    const records = await refreshCollectionSyncSnapshot(collection.id);
-    const pending = records.filter(item => ['pending', 'failed'].includes(item.cloudSyncStatus || 'pending'));
-    if (pending.length) uploadNewPhotosToCloud(collection, pending);
-  }
+  const button = event.target.closest('button');
+  if (!button) return;
+  if (button.hasAttribute('data-cloud-signin')) openCloudSignIn();
+  if (button.hasAttribute('data-refresh-albums')) refreshRemoteAlbums();
+  if (button.dataset.syncCollection) requestCollectionSync(button.dataset.syncCollection);
+  const album = remoteAlbums.find(item => item.id === (button.dataset.importAlbum || button.dataset.revokeAlbum));
+  if (album && button.dataset.importAlbum) downloadRemoteAlbum(album);
+  if (album && button.dataset.revokeAlbum) revokeRemoteAlbum(album);
 });
 
 async function deleteCollection(collectionId) {
   const collection = collections.find(item => item.id === collectionId);
-  const ownerId = collectionCloudOwner(collection);
-  if (!collection) return;
-  if (collection.cloudId && ownerId) {
-    cloudMutationQueue.put(ownerId, `delete-collection:${collection.id}`, 'delete-collection', { cloudId: collection.cloudId });
-    setSyncTask('mutations', { kind: 'mutation', phase: 'running', total: cloudMutationQueue.list(ownerId).length });
-  }
+  if (!collection || syncTasks.get(collectionId)?.phase === 'running') return;
+  await pendingImports.get(collection.id);
   const records = (await loadPhotos()).filter(item => item.collectionId === collection.id);
   await Promise.all(records.map(item => removePhoto(item.id)));
   localStorage.removeItem(`metadata-candidates-v2:${collection.id}`);
@@ -1220,7 +808,6 @@ async function deleteCollection(collectionId) {
   renderCollections();
   closeSyncPanel();
   await restoreArchive();
-  if (collection.cloudId && ownerId) flushCloudMutations();
 }
 
 function closeSyncConfirmation() {
@@ -1229,40 +816,22 @@ function closeSyncConfirmation() {
   document.body.classList.remove('modal-open');
 }
 
-function requestCollectionSync(collectionId) {
+async function requestCollectionSync(collectionId) {
   const collection = collections.find(item => item.id === collectionId);
   if (!collection) return;
-  if (!cloudUser) {
-    openUserModal();
-    showUserPanel('account');
-    return;
-  }
-  if (collection?.storageMode === 'cloud') {
-    openSyncPanel(collection.id, 'collection');
-    return;
-  }
+  if (accountRestorePromise) await accountRestorePromise;
+  if (!cloudUser || (navigator.onLine && !cloudAccountRepository.user && !await restoreAccount())) return openCloudSignIn();
+  if (syncTasks.get(collectionId)?.phase === 'running') return openSyncPanel(collectionId, 'collection');
   closeSyncPanel();
   el['sync-confirm-modal'].dataset.collectionId = collection.id;
-  document.querySelector('#sync-confirm-title').textContent = `同步“${collection.name}”？`;
+  document.querySelector('#sync-confirm-title').textContent = `发布“${collection.name}”？`;
   el['sync-confirm-modal'].classList.add('open');
   el['sync-confirm-modal'].setAttribute('aria-hidden', 'false');
   document.body.classList.add('modal-open');
   requestAnimationFrame(() => el['sync-confirm-submit'].focus());
 }
 
-el['collection-sync'].addEventListener('click', () => {
-  const collection = activeCollection();
-  const task = collection && syncTasks.get(`collection:${collection.id}`);
-  if (collection?.storageMode === 'cloud' || task?.phase === 'running') openSyncPanel(activeCollectionId, 'collection');
-  else requestCollectionSync(activeCollectionId);
-});
-el['photo-sync'].addEventListener('click', () => {
-  if (el['photo-sync'].dataset.status !== 'failed') return;
-  const item = photos[current];
-  const collection = activeCollection();
-  if (cloudUser && item && cloudMutationQueue.has(cloudUser.id, `photo:${item.id}`)) flushCloudMutations();
-  else if (item) uploadNewPhotosToCloud(collection, [item]);
-});
+el['collection-sync'].addEventListener('click', () => requestCollectionSync(activeCollectionId));
 el['sync-confirm-cancel'].addEventListener('click', closeSyncConfirmation);
 document.querySelector('.sync-confirm-backdrop').addEventListener('click', closeSyncConfirmation);
 el['sync-confirm-submit'].addEventListener('click', () => {
@@ -1277,26 +846,30 @@ function closeShareModal() {
   document.body.classList.remove('modal-open');
 }
 
-el['collection-share'].addEventListener('click', async () => {
+async function showShareLink(collection) {
+  const url = new URL(collection.sharePath, window.location.origin).href;
+  document.querySelector('.share-collection-name').textContent = collection.name;
+  el['share-link'].value = url;
+  await QRCode.toCanvas(el['share-qr'], url, { width: 220, margin: 1, color: { dark: '#201f1b', light: '#f5f3ed' } });
+  el['share-modal'].dataset.collectionId = collection.id;
+  el['share-modal'].classList.add('open');
+  el['share-modal'].setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+}
+
+el['collection-share'].addEventListener('click', () => {
   const collection = activeCollection();
-  if (!cloudUser || !collection?.cloudId) return;
-  el['collection-share'].disabled = true;
-  try {
-    const share = await cloudSyncRepository.shareCollection(collection.cloudId);
-    collection.sharePath = share.path;
-    saveCollections(collections, activeCollectionId);
-    const url = new URL(share.path, window.location.origin).href;
-    document.querySelector('.share-collection-name').textContent = collection.name;
-    el['share-link'].value = url;
-    await QRCode.toCanvas(el['share-qr'], url, { width: 220, margin: 1, color: { dark: '#201f1b', light: '#f5f3ed' } });
-    el['share-modal'].classList.add('open');
-    el['share-modal'].setAttribute('aria-hidden', 'false');
-    document.body.classList.add('modal-open');
-  } catch (error) {
-    setSyncTask(`collection:${collection.id}`, { kind: 'collection', phase: 'error', error: error.message });
-  } finally {
-    el['collection-share'].disabled = false;
-  }
+  if (!collection) return;
+  if (collection.sharePath) showShareLink(collection).catch(error => {
+    setSyncTask(collection.id, { phase: 'error', error: error.message });
+    openSyncPanel(collection.id, 'collection');
+  });
+  else requestCollectionSync(collection.id);
+});
+document.querySelector('.share-publish-again').addEventListener('click', () => {
+  const collectionId = el['share-modal'].dataset.collectionId;
+  closeShareModal();
+  requestCollectionSync(collectionId);
 });
 el['share-modal-close'].addEventListener('click', closeShareModal);
 document.querySelector('.share-modal-backdrop').addEventListener('click', closeShareModal);
@@ -1325,17 +898,6 @@ function closeUserModal() {
 renderAvatars();
 renderUserIdentity();
 
-const onboarding = document.querySelector('.onboarding');
-const onboardingCard = document.querySelector('.onboarding-card');
-const onboardingProfileStep = document.querySelector('.onboarding-profile-step');
-const onboardingGeoStep = document.querySelector('.onboarding-geo-step');
-const onboardingCloudStep = document.querySelector('.onboarding-cloud-step');
-const onboardingAvatarGrid = document.querySelector('.onboarding-avatar-grid');
-const onboardingNickname = document.querySelector('.onboarding-nickname');
-const onboardingAmapKey = document.querySelector('.onboarding-amap-key');
-const onboardingOpencageKey = document.querySelector('.onboarding-opencage-key');
-let onboardingAvatar = null;
-
 function applyLocalProfile(profile) {
   if (!profile) return;
   document.querySelectorAll('.profile-nickname').forEach(node => { node.textContent = profile.nickname; });
@@ -1347,150 +909,29 @@ function applyLocalProfile(profile) {
   }
 }
 
-function persistCloudProfile(user) {
-  if (!user) return null;
-  const avatarType = user.avatar_type === 'custom' ? 'custom' : 'sprite';
-  const fallbackAvatar = avatarType === 'sprite' ? avatarIndex : '';
-  const profile = localRepositories.profile.save({
-    nickname: user.nickname || 'StillFolio 用户',
-    avatarType,
-    avatarValue: user.avatar_value || fallbackAvatar,
-  });
-  applyLocalProfile(profile);
-  return profile;
+applyLocalProfile(localRepositories.profile.load());
+
+let accountRestorePromise;
+function restoreAccount() {
+  if (!navigator.onLine || (cloudUser && cloudAccountRepository.user?.id === cloudUser.id)) return Promise.resolve(cloudUser);
+  if (accountRestorePromise) return accountRestorePromise;
+  accountRestorePromise = cloudAccountRepository.restore().then(user => {
+    if (user?.id !== cloudUser?.id) { remoteAlbums = []; remoteAlbumsMessage = ''; }
+    cloudUser = user;
+    if (user && !localRepositories.profile.load()) {
+      localRepositories.profile.save({nickname: user.nickname || '留幅用户', avatarType: 'sprite', avatarValue: avatarIndex});
+    }
+    renderUserIdentity();
+    return user;
+  }).finally(() => { accountRestorePromise = null; });
+  return accountRestorePromise;
 }
-
-function closeOnboarding() {
-  onboarding.classList.remove('open');
-  onboarding.setAttribute('aria-hidden', 'true');
-  document.body.classList.remove('onboarding-open');
-}
-
-function completeOnboarding() {
-  const amapKey = onboardingAmapKey.value.trim();
-  const opencageKey = onboardingOpencageKey.value.trim();
-  if (amapKey) localStorage.setItem('amap-key', amapKey);
-  if (opencageKey) localStorage.setItem('opencage-key', opencageKey);
-  el['amap-key'].value = amapKey;
-  el['opencage-key'].value = opencageKey;
-  closeOnboarding();
-}
-
-function openOnboarding() {
-  onboardingAvatarGrid.innerHTML = Array.from({ length: AVATAR_COUNT }, (_, index) => `
-    <button class="onboarding-avatar avatar-sprite" type="button" role="radio" aria-label="头像 ${index + 1}" aria-checked="false" data-onboarding-avatar="${index}" style="--avatar-column:${index % 6};--avatar-row:${Math.floor(index / 6)}"></button>
-  `).join('');
-  onboarding.classList.add('open');
-  onboarding.setAttribute('aria-hidden', 'false');
-  document.body.classList.add('onboarding-open');
-  requestAnimationFrame(() => onboardingNickname.focus());
-}
-
-function showOnboardingStep(step) {
-  onboardingProfileStep.hidden = step !== 'profile';
-  onboardingGeoStep.hidden = step !== 'geo';
-  onboardingCloudStep.hidden = step !== 'cloud';
-  onboardingCard.querySelector('.onboarding-brand span').textContent = step === 'profile' ? '01 / 02' : step === 'geo' ? '02 / 02' : 'CLOUD';
-}
-
-document.querySelector('.onboarding-cloud-entry').addEventListener('click', () => {
-  showOnboardingStep('cloud');
-  requestAnimationFrame(() => document.querySelector('.onboarding-cloud-phone').focus());
-});
-document.querySelector('.onboarding-cloud-back').addEventListener('click', () => {
-  showOnboardingStep('profile');
-  requestAnimationFrame(() => onboardingNickname.focus());
-});
-
-onboardingAvatarGrid.addEventListener('click', event => {
-  const choice = event.target.closest('[data-onboarding-avatar]');
-  if (!choice) return;
-  onboardingAvatar = Number(choice.dataset.onboardingAvatar);
-  onboardingAvatarGrid.querySelectorAll('[data-onboarding-avatar]').forEach(button => {
-    const selected = button === choice;
-    button.classList.toggle('active', selected);
-    button.setAttribute('aria-checked', String(selected));
-  });
-});
-
-onboardingProfileStep.addEventListener('submit', event => {
-  event.preventDefault();
-  const nickname = onboardingNickname.value.trim();
-  if (!nickname) return onboardingNickname.focus();
-  if (onboardingAvatar === null) {
-    onboardingAvatarGrid.classList.add('needs-selection');
-    return;
-  }
-  const profile = localRepositories.profile.save({ nickname, avatarType: 'sprite', avatarValue: onboardingAvatar });
-  applyLocalProfile(profile);
-  showOnboardingStep('geo');
-  onboardingAmapKey.focus();
-});
-
-onboardingGeoStep.addEventListener('submit', event => {
-  event.preventDefault();
-  completeOnboarding();
-});
-document.querySelector('.onboarding-skip').addEventListener('click', completeOnboarding);
-
-document.querySelector('.onboarding-cloud-send').addEventListener('click', async event => {
-  await sendCloudVerificationCode({
-    button: event.currentTarget,
-    phoneInput: document.querySelector('.onboarding-cloud-phone'),
-    codeInput: document.querySelector('.onboarding-cloud-code'),
-    note: document.querySelector('.onboarding-cloud-note'),
-    scene: 'login',
-  });
-});
-
-onboardingCloudStep.addEventListener('submit', async event => {
-  event.preventDefault();
-  const submit = document.querySelector('.onboarding-cloud-submit');
-  const note = document.querySelector('.onboarding-cloud-note');
-  submit.disabled = true;
-  try {
-    await cloudRestorePromise;
-    const user = await cloudAccountRepository.verify({
-      phone: document.querySelector('.onboarding-cloud-phone').value.trim(),
-      code: document.querySelector('.onboarding-cloud-code').value.trim(),
-      scene: 'login',
-    });
-    await completeCloudConnection(user, { finishOnboarding: true });
-  } catch (error) {
-    showAuthMessage(note, error.message, true);
-  } finally {
-    submit.disabled = false;
-  }
-});
-
-if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('reset-onboarding')) {
-  localRepositories.profile.clear();
-  window.history.replaceState({}, '', window.location.pathname);
-}
-const localProfile = localRepositories.profile.load();
-if (localProfile) applyLocalProfile(localProfile);
-else openOnboarding();
-
-const cloudRestorePromise = cloudAccountRepository.restore().then(user => {
-  cloudUser = user;
-  if (user && !localRepositories.profile.load()) {
-    persistCloudProfile(user);
-    closeOnboarding();
-  }
-  renderUserIdentity();
-  renderSyncStatus();
-  return user;
-});
 
 document.querySelectorAll('.user-profile-trigger').forEach(trigger => trigger.addEventListener('click', openUserModal));
 el['user-modal-close'].addEventListener('click', closeUserModal);
 el['user-done'].addEventListener('click', () => {
   if (!document.querySelector('.nickname-setting').hidden) {
     document.querySelector('.nickname-form').requestSubmit();
-    return;
-  }
-  if (!document.querySelector('.account-setting').hidden) {
-    document.querySelector('.account-auth-form').requestSubmit();
     return;
   }
   closeUserModal();
@@ -1502,30 +943,10 @@ document.querySelector('.nickname-form').addEventListener('submit', async event 
   const nickname = input.value.trim();
   const note = document.querySelector('.nickname-note');
   if (!nickname) { note.textContent = '请输入昵称'; note.hidden = false; input.focus(); return; }
-  const owner = cloudUser?.id;
-  el['user-done'].disabled = true;
-  input.disabled = true;
-  try {
-    if (owner) {
-      await avatarSyncChain;
-      if (cloudUser?.id !== owner) throw new Error('账户已变更，请重试');
-      const user = await cloudAccountRepository.updateProfile({nickname});
-      if (cloudUser?.id !== owner) return;
-      cloudUser = user;
-      persistCloudProfile(user);
-    } else {
-      const profile = localRepositories.profile.save({...localRepositories.profile.load(), nickname});
-      applyLocalProfile(profile);
-    }
-    renderUserIdentity();
-    showUserPanel();
-  } catch (error) {
-    note.textContent = `保存失败：${error.message}`;
-    note.hidden = false;
-  } finally {
-    el['user-done'].disabled = false;
-    input.disabled = false;
-  }
+  const profile = localRepositories.profile.save({...localRepositories.profile.load(), nickname});
+  applyLocalProfile(profile);
+  renderUserIdentity();
+  showUserPanel();
 });
 document.querySelector('.user-settings').addEventListener('click', event => {
   const entry = event.target.closest('[data-user-panel]');
@@ -1535,96 +956,21 @@ document.querySelector('.user-settings').addEventListener('click', event => {
 });
 
 function showAccountMessage(message, isError = false) {
-  const note = document.querySelector('.account-service-note');
-  showAuthMessage(note, message, isError);
-}
-
-function showAuthMessage(note, message, isError = false) {
+  const note = document.querySelector('.account-summary-note');
   note.textContent = message;
-  note.classList.toggle('error', isError);
   note.hidden = false;
+  note.classList.toggle('error', isError);
 }
 
-async function sendCloudVerificationCode({ button, phoneInput, codeInput, note, scene }) {
-  const phone = phoneInput.value.trim();
-  if (!phone) {
-    showAuthMessage(note, '请先输入手机号', true);
-    phoneInput.focus();
-    return;
-  }
-  button.disabled = true;
-  try {
-    const data = await cloudAccountRepository.sendCode(phone, scene);
-    if (data.debug_code) codeInput.value = data.debug_code;
-    showAuthMessage(note, data.debug_code ? '开发模式验证码已自动填入' : '验证码已发送，请查看短信');
-    let remaining = Number(data.retry_after || 60);
-    clearInterval(codeCooldownTimer);
-    button.textContent = `${remaining}s 后重试`;
-    codeCooldownTimer = setInterval(() => {
-      remaining -= 1;
-      button.textContent = remaining > 0 ? `${remaining}s 后重试` : '重新获取';
-      if (remaining <= 0) {
-        clearInterval(codeCooldownTimer);
-        button.disabled = false;
-      }
-    }, 1000);
-  } catch (error) {
-    button.disabled = false;
-    showAuthMessage(note, error.message, true);
-  }
-}
-
-async function completeCloudConnection(user, { finishOnboarding = false } = {}) {
-  cloudUser = user;
-  if (cloudAccountRepository.created) await syncCloudAvatar();
-  else await restoreCloudAvatar();
-  user = cloudUser;
-  persistCloudProfile(user);
-  renderUserIdentity();
-  if (finishOnboarding) closeOnboarding();
-  else showUserPanel();
-  await flushCloudMutations();
-  syncLogos();
-  const remoteCollections = await restoreCloudCollections();
-  await flushCloudMutations();
-  await restoreArchive();
-  resumeInterruptedCollectionUploads(remoteCollections);
-}
-
-document.querySelector('.account-send-code').addEventListener('click', async event => {
-  await sendCloudVerificationCode({
-    button: event.currentTarget,
-    phoneInput: document.querySelector('.account-phone'),
-    codeInput: document.querySelector('.account-code'),
-    note: document.querySelector('.account-service-note'),
-    scene: 'register',
-  });
-});
-
-document.querySelector('.account-auth-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  const submit = el['user-done'];
-  submit.disabled = true;
-  try {
-    const user = await cloudAccountRepository.verify({
-      phone: document.querySelector('.account-phone').value.trim(),
-      code: document.querySelector('.account-code').value.trim(),
-      scene: 'register',
-      profile: localRepositories.profile.load(),
-    });
-    await completeCloudConnection(user);
-  } catch (error) {
-    showAccountMessage(error.message, true);
-  } finally {
-    submit.disabled = false;
-  }
-});
 document.querySelector('.account-logout').addEventListener('click', async event => {
   const button = event.currentTarget;
   button.disabled = true;
   try {
     await cloudAccountRepository.logout();
     cloudUser = null;
+    document.querySelector('.account-summary-note').hidden = true;
+    remoteAlbums = [];
+    remoteAlbumsMessage = '';
     renderUserIdentity();
   } catch (error) {
     showAccountMessage(error.message, true);
@@ -1632,65 +978,6 @@ document.querySelector('.account-logout').addEventListener('click', async event 
     button.disabled = false;
   }
 });
-let avatarSyncChain = Promise.resolve();
-let avatarEditRevision = 0;
-async function restoreCloudAvatar() {
-  if (!cloudUser) return;
-  if (cloudUser.avatar_type !== 'custom') {
-    persistCloudProfile(cloudUser);
-    return;
-  }
-  const asset = await cloudAccountRepository.request('/sync/avatar');
-  if (!asset) {
-    localStorage.setItem('custom-avatar-enabled', 'false');
-    renderAvatars();
-    return;
-  }
-  const blob = await cloudSyncRepository.downloadAsset(asset);
-  await saveAsset('custom-avatar', blob);
-  if (customAvatarUrl) URL.revokeObjectURL(customAvatarUrl);
-  customAvatarUrl = URL.createObjectURL(blob);
-  localStorage.setItem('custom-avatar-enabled', 'true');
-  renderAvatars();
-}
-
-function syncCloudAvatar() {
-  if (!cloudUser) return Promise.resolve();
-  const owner = cloudUser.id;
-  const revision = ++avatarEditRevision;
-  const profile = localRepositories.profile.load();
-  const blobPromise = profile?.avatarType === 'custom' ? loadAsset('custom-avatar') : Promise.resolve(null);
-  localStorage.setItem('custom-avatar-enabled', String(profile?.avatarType === 'custom' && Boolean(customAvatarUrl)));
-  renderAvatars();
-  localStorage.setItem('pending-avatar-sync', JSON.stringify({owner, profile}));
-  avatarSyncChain = avatarSyncChain.catch(() => {}).then(async () => {
-    if (cloudUser?.id !== owner) return;
-    try {
-      const blob = await blobPromise;
-      if (profile?.avatarType === 'custom') {
-        if (!blob) throw new Error('自定义头像文件不存在，请重新选择');
-        const body = new FormData();
-        body.append('file', blob, blob.name || 'avatar.png');
-        await cloudAccountRepository.request('/sync/avatar', {method: 'POST', body});
-        cloudAccountRepository.user = await cloudAccountRepository.request('/me');
-      } else {
-        await cloudAccountRepository.updateProfile({avatar_type: 'sprite', avatar_value: String(profile?.avatarValue ?? avatarIndex)});
-      }
-      if (cloudUser?.id !== owner) return;
-      cloudUser = cloudAccountRepository.user;
-      if (revision === avatarEditRevision) {
-        localStorage.removeItem('pending-avatar-sync');
-        persistCloudProfile(cloudUser);
-        renderAvatars();
-      }
-    } catch (error) {
-      showAccountMessage(`头像同步失败，联网后将重试：${error.message}`, true);
-      console.warn('头像同步失败', error);
-    }
-  });
-  return avatarSyncChain;
-}
-
 el['avatar-grid'].addEventListener('click', event => {
   const choice = event.target.closest('[data-avatar]');
   if (!choice) return;
@@ -1698,9 +985,8 @@ el['avatar-grid'].addEventListener('click', event => {
   localStorage.setItem('user-avatar-index', String(avatarIndex));
   localStorage.setItem('custom-avatar-enabled', 'false');
   const profile = localRepositories.profile.load();
-  if (profile) localRepositories.profile.save({ ...profile, avatarType: 'sprite', avatarValue: avatarIndex });
+  localRepositories.profile.save({ nickname: '留幅用户', ...profile, avatarType: 'sprite', avatarValue: avatarIndex });
   renderAvatars();
-  syncCloudAvatar();
 });
 el['current-avatar-upload'].addEventListener('click', () => el['custom-avatar-input'].click());
 el['custom-avatar-input'].addEventListener('change', async event => {
@@ -1711,10 +997,9 @@ el['custom-avatar-input'].addEventListener('change', async event => {
   customAvatarUrl = URL.createObjectURL(file);
   localStorage.setItem('custom-avatar-enabled', 'true');
   const profile = localRepositories.profile.load();
-  if (profile) localRepositories.profile.save({ ...profile, avatarType: 'custom', avatarValue: 'custom-avatar' });
+  localRepositories.profile.save({ nickname: '留幅用户', ...profile, avatarType: 'custom', avatarValue: 'custom-avatar' });
   renderAvatars();
   event.target.value = '';
-  syncCloudAvatar();
 });
 el['custom-logo-upload'].addEventListener('click', () => el['custom-logo-input'].click());
 el['custom-logo-input'].addEventListener('change', async event => {
@@ -1725,7 +1010,6 @@ el['custom-logo-input'].addEventListener('change', async event => {
     customLogos.push({ id, blob: file, url: URL.createObjectURL(file) });
   }
   renderLogoLibrary();
-  syncLogos();
   event.target.value = '';
 });
 el['logo-library'].addEventListener('click', async event => {
@@ -1733,13 +1017,6 @@ el['logo-library'].addEventListener('click', async event => {
   if (!remove) return;
   const id = remove.dataset.removeLogo;
   const logo = customLogos.find(item => item.id === id);
-  const ownerId = cloudUser?.id || localStorage.getItem('stillfolio-last-cloud-owner-id');
-  if (ownerId) {
-    cloudMutationQueue.put(ownerId, `delete-logo:${id}`, 'delete-logo', { sourceId: id });
-    setSyncTask('mutations', { kind: 'mutation', phase: 'running', total: cloudMutationQueue.list(ownerId).length });
-    remoteLogoAssets.delete(id);
-    flushCloudMutations();
-  }
   if (logo) URL.revokeObjectURL(logo.url);
   customLogos = customLogos.filter(item => item.id !== id);
   await removeAsset(id);
@@ -1783,10 +1060,7 @@ function loadInfoCandidates() {
 
 function saveInfoCandidates(candidates) {
   localStorage.setItem(`metadata-candidates-v2:${activeCollectionId}`, JSON.stringify(candidates));
-  const collection = activeCollection();
-  queueCloudMutation(`candidates:${activeCollectionId}`, 'candidates', {
-    collectionId: activeCollectionId, candidates,
-  }, collection);
+
 }
 
 function setCanvasLocked(locked) {
@@ -1976,7 +1250,6 @@ async function applyInfoValues(type, values) {
     Object.assign(item.exif, values);
   }
   await savePhoto(item);
-  queuePhotoMetadata(item);
   show(current);
 }
 
@@ -2206,7 +1479,7 @@ function applyLocationVisibility(root, item, settings = displaySettings) {
 function slotMarkup(type, item, index, total = photos.length, settings = displaySettings, slot = 'topLeft') {
   const data = slotData(type, item, index, total, settings, fmt, slot);
   if (data.type === 'hidden' || (canvasLocked && data.missing)) return '';
-  if (data.type === 'logo') return logoMarkup(selectedLogoUrl(settings), settings.logoShareQr && activeCollection().cloudId ? shareQrUrl(activeCollection().sharePath) : '');
+  if (data.type === 'logo') return logoMarkup(selectedLogoUrl(settings), settings.logoShareQr && activeCollection().sharePath ? shareQrUrl(activeCollection().sharePath) : '');
   return `${data.label ? `<span class="technical-label">${escapeHtml(data.label)}</span>` : ''}${data.lines.map(line => `<span class="technical-value">${escapeHtml(line)}</span>`).join('')}`;
 }
 
@@ -2316,7 +1589,6 @@ async function finishCrop(event) {
   el.photo.classList.remove('dragging');
   if (!cropDragMoved) return;
   await savePhoto(item);
-  queuePhotoMetadata(item);
 }
 window.addEventListener('pointerup', finishCrop);
 window.addEventListener('pointercancel', finishCrop);
@@ -2349,10 +1621,10 @@ async function resolveCoordinates(service, lat, lng) {
       if (!response.ok || !place) throw new Error('个人 API Key 解析失败');
       return place;
     } catch (error) {
-      if (!cloudUser) throw new Error('个人 API Key 解析失败，请检查 Key 或连接云端账户');
+      if (!cloudUser) throw new Error('个人 API Key 解析失败，请检查 Key 或友间登录');
     }
   }
-  if (!cloudUser) throw new Error('请填写个人 API Key 或连接云端账户后解析');
+  if (!cloudUser) throw new Error('请填写个人 API Key 或友间登录后解析');
   const owner = cloudUser.id;
   try {
     const data = await cloudAccountRepository.request('/geocode/reverse', {
@@ -2378,7 +1650,7 @@ async function updatePlace() {
   if (item.placeEditedByService[service]) return;
   const key = service === 'amap' ? el['amap-key'].value.trim() : el['opencage-key'].value.trim();
   if (item.place) return;
-  if (!key && !cloudUser) return;
+  if (!navigator.onLine || (!key && !cloudUser)) return;
   const owner = cloudUser?.id;
   const taskKey = `${item.id}:${service}:${lat}:${lng}`;
   if (placeResolutionTasks.has(taskKey)) return placeResolutionTasks.get(taskKey);
@@ -2390,7 +1662,6 @@ async function updatePlace() {
       item.places[service] = resolved;
       item.place = resolved;
       await savePhoto(item);
-      queuePhotoMetadata(item);
       if (photos[current] === item && geoService === service) {
         updateDisplaySlots(item);
         updateCropMode(item);
@@ -2436,7 +1707,7 @@ function displayConfigMarkup(slot, type) {
         ${customLogos.map((logo, index) => `<button type="button" data-logo-id="${logo.id}" aria-label="自定义 LOGO ${index + 1}" aria-checked="${displayDraft.customLogoEnabled && displayDraft.customLogoId === logo.id}" class="${displayDraft.customLogoEnabled && displayDraft.customLogoId === logo.id ? 'active' : ''}"><img src="${logo.url}" alt=""></button>`).join('')}
         <button class="logo-add-choice" type="button" data-add-logo aria-label="新增 LOGO" title="新增 LOGO"><span>＋</span></button>
       </div>
-      ${activeCollection().cloudId ? `<label class="logo-share-setting"><input type="checkbox" data-logo-share-qr${displayDraft.logoShareQr ? ' checked' : ''}><span>在 LOGO 右侧展示分享二维码</span></label>` : ''}
+      ${activeCollection().sharePath ? `<label class="logo-share-setting"><input type="checkbox" data-logo-share-qr${displayDraft.logoShareQr ? ' checked' : ''}><span>在 LOGO 右侧展示分享二维码</span></label>` : ''}
     </div>`;
   if (type === 'location') return `
     <div class="slot-config location-config">
@@ -2613,11 +1884,7 @@ el['display-settings-list'].addEventListener('change', async event => {
     if (!checkbox.checked) { displayDraft.logoShareQr = false; previewDisplayDraft(); return; }
     checkbox.disabled = true;
     try {
-      if (!collection.sharePath) {
-        const share = await cloudSyncRepository.shareCollection(collection.cloudId);
-        collection.sharePath = share.path;
-        saveCollections(collections, activeCollectionId);
-      }
+      if (!collection.sharePath) throw new Error('请先发布相册');
       await prepareShareQr(collection.sharePath);
       if (displayDraft && activeCollectionId === collection.id) { displayDraft.logoShareQr = true; previewDisplayDraft(); }
     } catch (error) {
@@ -2793,13 +2060,30 @@ function show(index, { deferRender = false } = {}) {
   el['delete-current'].disabled = false;
   el['canvas-lock'].disabled = false;
   el['canvas-info'].disabled = false;
-  renderPhotoSyncStatus(item);
   updatePlace();
 }
 
-async function addFiles(fileList) {
+function addFiles(fileList) {
+  const collectionId = activeCollectionId;
+  const cropMode = displaySettings.longPhotoDefaultMode === 'expanded' ? 'expanded' : 'window';
+  const files = [...fileList];
+  const task = (pendingImports.get(collectionId) || Promise.resolve())
+    .then(() => importPhotos(files, collectionId, cropMode))
+    .catch(error => {
+      console.error('保存照片失败', error);
+      if (collectionId !== activeCollectionId) return;
+      el.place.textContent = '无法保存所选照片';
+      el.coordinates.textContent = '请检查设备存储空间后重试';
+    })
+    .finally(() => {
+      if (pendingImports.get(collectionId) === task) pendingImports.delete(collectionId);
+    });
+  pendingImports.set(collectionId, task);
+}
+
+async function importPhotos(fileList, collectionId, cropMode) {
   const files = [...fileList].filter(f => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
-  if (!files.length) return;
+  if (!files.length || !collections.some(collection => collection.id === collectionId)) return;
   const importStartedAt = Date.now();
   const results = await Promise.allSettled(files.map(async (source, fileIndex) => {
     const file = await independentPhotoFile(source);
@@ -2813,7 +2097,7 @@ async function addFiles(fileList) {
         img.onerror = () => reject(new Error(`无法解码 ${file.name}`));
         img.src = url;
       });
-      return { id: photoId(file, activeCollectionId), collectionId: activeCollectionId, file, url, ...size, exif, places: {}, placeEditedByService: {}, cropX: 50, cropY: 50, cropMode: displaySettings.longPhotoDefaultMode === 'expanded' ? 'expanded' : 'window', createdAt: importStartedAt + fileIndex };
+      return { id: photoId(file, collectionId), collectionId, file, url, ...size, exif, places: {}, placeEditedByService: {}, cropX: 50, cropY: 50, cropMode, createdAt: importStartedAt + fileIndex };
     } catch (error) {
       URL.revokeObjectURL(url);
       throw error;
@@ -2823,32 +2107,27 @@ async function addFiles(fileList) {
   const failed = results.filter(result => result.status === 'rejected');
   failed.forEach(result => console.error(result.reason));
   if (!loaded.length) {
-    showEmpty();
+    if (collectionId !== activeCollectionId) return;
     el.place.textContent = '无法读取所选照片';
     el.coordinates.textContent = '请检查文件格式后重新选择';
     return;
   }
-  const existing = new Set(photos.map(item => item.id));
-  const fresh = loaded.filter(item => !existing.has(item.id));
-  const repaired = [];
-  for (const replacement of loaded.filter(item => existing.has(item.id))) {
-    const original = photos.find(item => item.id === replacement.id);
-    // Preserve metadata/crop edits; replace only the newly selected image bytes.
-    const updated = {...original, file: replacement.file, cloudSyncStatus: original.cloudSyncStatus === 'success' ? 'success' : 'pending'};
-    await savePhoto(updated);
-    Object.assign(original, updated);
-    repaired.push(original);
+  const stored = new Map((await loadPhotos())
+    .filter(item => item.collectionId === collectionId && !item.cloudDeleted).map(item => [item.id, item]));
+  let firstNewId;
+  try {
+    for (const item of loaded) {
+      const original = (collectionId === activeCollectionId && photos.find(photo => photo.id === item.id)) || stored.get(item.id);
+      const updated = original ? { ...original, file: item.file } : item;
+      await savePhoto(updated);
+      stored.set(item.id, updated);
+      if (!original) firstNewId ||= item.id;
+    }
+  } finally {
+    loaded.forEach(item => URL.revokeObjectURL(item.url));
   }
-  const collection = activeCollection();
-  if (collection?.storageMode === 'cloud') {
-    fresh.forEach(item => { item.cloudSyncStatus = collection.autoSyncNewPhotos === false ? 'pending' : 'syncing'; });
-  }
-  for (const item of loaded.filter(item => existing.has(item.id))) URL.revokeObjectURL(item.url);
-  photos.push(...fresh);
-  await Promise.all(fresh.map(savePhoto));
-  if (fresh.length) renderCollections();
-  if (fresh.length) show(photos.length - fresh.length);
-  if ((fresh.length || repaired.length) && collection?.storageMode === 'cloud' && collection.autoSyncNewPhotos !== false && cloudUser) uploadNewPhotosToCloud(collection, [...fresh, ...repaired]);
+  renderCollections();
+  if (collectionId === activeCollectionId) await restoreArchive(firstNewId || photos[current]?.id);
 }
 
 function isHeic(file) {
@@ -2939,7 +2218,6 @@ el['crop-mode-control'].addEventListener('click', async () => {
       applyMode();
     }
     await savePhoto(item);
-    queuePhotoMetadata(item);
   } finally {
     cropModeAnimating = false;
   }
@@ -2954,7 +2232,6 @@ document.addEventListener('keydown', event => {
     '.canvas-lock',
     '.crop-mode-control',
     '.canvas-info',
-    '.photo-sync',
   ].join(','));
   const isEditing = target instanceof HTMLElement && (
     target.isContentEditable ||
@@ -3056,14 +2333,12 @@ function closeCollectionSettings() {
 
 function openCollectionDeleteConfirmation(collectionId = activeCollectionId) {
   const collection = collections.find(item => item.id === collectionId);
-  if (!collection) return;
+  if (!collection || syncTasks.get(collectionId)?.phase === 'running') return;
   closeCollectionSettings();
   closeSyncPanel();
   el['collection-delete-modal'].dataset.collectionId = collection.id;
   document.querySelector('#collection-delete-title').textContent = `删除“${collection.name}”？`;
-  document.querySelector('#collection-delete-copy').textContent = collection.storageMode === 'cloud'
-    ? '本地缓存、云端照片、编辑信息与候选库都会被永久删除，此操作无法撤销。'
-    : '作品集中的照片、编辑信息与候选库都会从当前设备删除，此操作无法撤销。';
+  document.querySelector('#collection-delete-copy').textContent = '删除当前设备上的相册和照片。已有云端副本可在「云端副本」中管理。';
   el['collection-delete-modal'].classList.add('open');
   el['collection-delete-modal'].setAttribute('aria-hidden', 'false');
   document.body.classList.add('modal-open');
@@ -3113,8 +2388,7 @@ document.querySelector('.collection-information').addEventListener('submit', eve
   if (collection.name !== name || (collection.description || '') !== description) {
     Object.assign(collection, { name, description });
     saveCollections(collections, activeCollectionId);
-    queueCloudMutation(`collection:${collection.id}`, 'collection-metadata', { collectionId: collection.id }, collection);
-    renderCollections();
+      renderCollections();
   }
   document.querySelector('.collection-information-back').click();
 });
@@ -3149,7 +2423,7 @@ el['collection-form'].addEventListener('submit', async event => {
 document.addEventListener('click', event => {
   if (!event.target.closest('.collection-heading')) closeCollectionMenu();
   if (!event.target.closest('.canvas-info, .canvas-info-panel')) closeCanvasInfo();
-  if (!event.target.closest('.global-sync, .collection-sync, .canvas-sync-panel')) closeSyncPanel();
+  if (!event.target.closest('.global-sync, .collection-sync, .collection-share, .canvas-sync-panel')) closeSyncPanel();
 });
 
 function showEmpty() {
@@ -3176,7 +2450,6 @@ function showEmpty() {
   el['delete-current'].disabled = true;
   el['canvas-lock'].disabled = true;
   el['canvas-info'].disabled = true;
-  el['photo-sync'].hidden = true;
   el.meta.innerHTML = '';
   closeCanvasInfo();
 }
@@ -3205,14 +2478,6 @@ function closeDeleteModal() {
 async function deleteCurrentPhoto() {
   const item = photos[current];
   if (!item) return;
-  const collection = collections.find(value => value.id === item.collectionId);
-  const ownerId = collectionCloudOwner(collection);
-  if (ownerId && collection?.storageMode === 'cloud') {
-    cloudMutationQueue.remove(ownerId, `photo:${item.id}`);
-    cloudMutationQueue.put(ownerId, `delete-photo:${item.id}`, 'delete-photo', { sourceId: item.id });
-    setSyncTask('mutations', { kind: 'mutation', phase: 'running', total: cloudMutationQueue.list(ownerId).length });
-    flushCloudMutations();
-  }
   URL.revokeObjectURL(item.url);
   photos.splice(current, 1);
   await removePhoto(item.id);
@@ -3282,7 +2547,7 @@ function exportTypography(canvasWidth) {
 }
 
 async function renderExport(item, index) {
-  const qrUrl = displaySettings.logoShareQr && activeCollection().cloudId ? await prepareShareQr(activeCollection().sharePath) : '';
+  const qrUrl = displaySettings.logoShareQr && activeCollection().sharePath ? await prepareShareQr(activeCollection().sharePath) : '';
   const qrImage = qrUrl ? await loadImage(qrUrl) : null;
   const canvas = document.createElement('canvas');
   canvas.width = 2160;
@@ -3556,7 +2821,9 @@ async function exportAllPhotos() {
   downloadBlob(zipFiles(files), 'jyonn-photo-archive.zip');
 }
 
-async function restoreArchive() {
+async function restoreArchive(selectedId) {
+  photos.forEach(item => URL.revokeObjectURL(item.url));
+  photos = [];
   const revision = ++archiveLoadRevision;
   const collectionId = activeCollectionId;
   applyService(geoService, { persist: false, resolvePlace: false });
@@ -3583,8 +2850,8 @@ async function restoreArchive() {
       normalizeCrop(record);
       restored.push(record);
     }
-    photos.push(...restored);
-    if (photos.length) show(0);
+    photos = restored;
+    if (photos.length) show(Math.max(0, photos.findIndex(item => item.id === selectedId)));
   } catch (error) {
     console.error('无法恢复本地照片缓存', error);
     el.place.textContent = '无法读取本地作品集';
@@ -3596,11 +2863,6 @@ async function restoreCustomAssets() {
   try {
     const [logos, avatar] = await Promise.all([loadAssets('custom-logo'), loadAsset('custom-avatar')]);
     customLogos = logos.map(asset => ({ ...asset, url: URL.createObjectURL(asset.blob) }));
-    if (displaySettings.customLogoEnabled && !customLogos.some(logo => logo.id === displaySettings.customLogoId)) {
-      displaySettings.customLogoId = '';
-      displaySettings.customLogoEnabled = false;
-      saveActiveDisplaySettings();
-    }
     if (avatar) customAvatarUrl = URL.createObjectURL(avatar);
     renderAvatars();
     renderLogoLibrary();
@@ -3627,15 +2889,14 @@ const photoSorter = createPhotoSorter({
     carousel.reset();
     show(current);
     renderCollections();
-    queueCloudMutation(`collection:${collection.id}`, 'collection-metadata', {collectionId: collection.id}, collection);
   },
 });
 
 document.querySelectorAll('.sermo-login').forEach(button => button.addEventListener('click', async () => {
-  const note = button.closest('.onboarding-step, .user-subpanel')?.querySelector('.sermo-entry-note');
+  const note = button.closest('.user-subpanel')?.querySelector('.sermo-entry-note');
   button.disabled = true;
   const label = button.textContent;
-  button.textContent = '正在前往 Sermo…';
+  button.textContent = '正在前往友间…';
   if (note) note.hidden = true;
   try { await startSermoLogin({returnEditor: !shell.classList.contains('mobile-library-open')}); }
   catch (error) {
@@ -3644,42 +2905,17 @@ document.querySelectorAll('.sermo-login').forEach(button => button.addEventListe
   }
 }));
 window.addEventListener('pageshow', event => {
-  if (event.persisted) document.querySelectorAll('.sermo-login').forEach(button => { button.disabled = false; button.textContent = '使用 Sermo 登录'; });
+  if (event.persisted) document.querySelectorAll('.sermo-login').forEach(button => { button.disabled = false; button.textContent = '使用友间登录'; });
 });
-cloudRestorePromise.then(user => {
-  const phoneEntry = sessionStorage.getItem('stillfolio-login-method') === 'phone';
-  sessionStorage.removeItem('stillfolio-login-method');
+renderCollections();
+restoreCustomAssets().then(restoreArchive);
+restoreAccount().then(user => {
   const returnEditor = sessionStorage.getItem('stillfolio-sermo-return-editor') === 'true';
   sessionStorage.removeItem('stillfolio-sermo-return-editor');
   if (user && returnEditor && mobileViewport.matches) openMobileEditor();
-  if (!user && phoneEntry) {
-    if (localRepositories.profile.load()) { openUserModal(); showUserPanel('account'); }
-    else { openOnboarding(); showOnboardingStep('cloud'); }
-  }
 });
 
-renderCollections();
-const assetRestorePromise = restoreCustomAssets();
-Promise.all([assetRestorePromise, cloudRestorePromise]).then(async ([, user]) => {
-  renderSyncStatus();
-  let remoteCollections = [];
-  if (user) {
-    const pending = JSON.parse(localStorage.getItem('pending-avatar-sync') || 'null');
-    if (pending?.owner === user.id) {
-      localRepositories.profile.save(pending.profile);
-      await syncCloudAvatar();
-    } else await restoreCloudAvatar().catch(error => console.warn('恢复云端头像失败', error));
-    await flushCloudMutations();
-    [, remoteCollections] = await Promise.all([syncLogos(), restoreCloudCollections()]);
-    await flushCloudMutations();
-  }
-  await restoreArchive();
-  if (user) resumeInterruptedCollectionUploads(remoteCollections);
-});
 window.addEventListener('online', async () => {
-  const pending = JSON.parse(localStorage.getItem('pending-avatar-sync') || 'null');
-  if (pending?.owner === cloudUser?.id) await syncCloudAvatar();
-  flushCloudMutations();
-  const remoteCollections = await restoreCloudCollections();
-  resumeInterruptedCollectionUploads(remoteCollections);
+  await restoreAccount();
+  if (el['canvas-sync-panel'].classList.contains('open') && syncPanelMode === 'global') refreshRemoteAlbums();
 });

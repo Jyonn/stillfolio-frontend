@@ -15,7 +15,6 @@ export function createCollection(name, settings, collectionId = id()) {
     photoOrder: [],
     photoColors: {},
     settings: cloneDisplaySettings(settings),
-    autoSyncNewPhotos: true,
     createdAt: Date.now(),
   };
 }
@@ -28,12 +27,17 @@ export function loadCollectionState(fallbackSettings) {
         ...item,
         name: String(item.name || '未命名作品集'),
         settings: cloneDisplaySettings(item.settings || fallbackSettings),
-        autoSyncNewPhotos: item.autoSyncNewPhotos !== false,
         createdAt: Number(item.createdAt),
       }));
       if (collections.length) {
         const requested = localStorage.getItem(ACTIVE_COLLECTION_KEY);
-        return { collections, activeId: collections.some(item => item.id === requested) ? requested : collections[0].id };
+        let firstVisible = collections.find(item => !item.cloudDeleted);
+        if (!firstVisible) {
+          firstVisible = createCollection('未命名作品集', fallbackSettings);
+          collections.push(firstVisible);
+        }
+        const active = collections.find(item => !item.cloudDeleted && item.id === requested) || firstVisible;
+        return { collections, activeId: active.id };
       }
     }
   } catch { /* Invalid local data falls back to a new local workspace. */ }

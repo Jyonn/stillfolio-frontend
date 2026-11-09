@@ -6,11 +6,11 @@ import {consumeSermoCallback} from './sermo-pkce.js';
 import {startSermoLogin} from './sermo-login.js';
 
 export async function renderSermoCallback(search) {
-  document.title = 'Sermo 登录 · 留幅';
+  document.title = '友间登录 · 留幅';
   const app = document.querySelector('#app');
-  app.innerHTML = `<main class="sermo-callback"><section class="sermo-card"><img src="${brandLogoUrl}" alt="留幅 STILLFOLIO"><h1>Sermo 登录</h1>
+  app.innerHTML = `<main class="sermo-callback"><section class="sermo-card"><img src="${brandLogoUrl}" alt="留幅 STILLFOLIO"><h1>友间登录</h1>
     <p class="sermo-status" role="status" aria-live="polite">正在核对授权并连接账户…</p>
-    <div class="sermo-callback-actions" hidden><button class="sermo-retry" type="button">重新使用 Sermo 登录</button><button class="sermo-phone" type="button">使用手机号登录</button><a href="/">返回作品集</a></div>
+    <div class="sermo-callback-actions" hidden><button class="sermo-retry" type="button">重新使用 友间登录</button><a href="/">返回作品集</a></div>
   </section></main>`;
   const status = app.querySelector('.sermo-status');
   const actions = app.querySelector('.sermo-callback-actions');
@@ -18,13 +18,9 @@ export async function renderSermoCallback(search) {
   app.querySelector('.sermo-retry').addEventListener('click', async event => {
     const button = event.currentTarget;
     button.disabled = true;
-    status.textContent = '正在前往 Sermo 授权页…';
+    status.textContent = '正在前往 友间授权页…';
     try { await startSermoLogin({returnTo, returnEditor, loginHint}); }
-    catch { status.textContent = '无法连接授权服务，请稍后重试或使用手机号登录'; button.disabled = false; }
-  });
-  app.querySelector('.sermo-phone').addEventListener('click', () => {
-    sessionStorage.setItem('stillfolio-login-method', 'phone');
-    location.replace('/');
+    catch { status.textContent = '无法连接授权服务，请稍后重试'; button.disabled = false; }
   });
   try {
     const flow = consumeSermoCallback(search, sessionStorage);
@@ -33,7 +29,7 @@ export async function renderSermoCallback(search) {
       method: 'POST', credentials: 'include', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(flow.body), signal: AbortSignal.timeout(45000),
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.detail || 'Sermo 登录失败，请重新授权');
+    if (!response.ok) throw new Error(result.detail || '友间登录失败，请重新授权');
     if (flow.cancelled || !result.user?.id || typeof result.access_token !== 'string') throw new Error('授权响应异常，本次没有完成登录');
     // This is StillFolio's own session; its refresh cookie survives navigation.
     // Neither the provider token nor our access token goes into browser storage.
@@ -42,7 +38,7 @@ export async function renderSermoCallback(search) {
     location.replace(returnTo);
   } catch (error) {
     // No debug logger is imported by this route. Never print callback payloads.
-    status.textContent = error instanceof TypeError || ['AbortError', 'TimeoutError'].includes(error.name) ? '网络连接失败或超时，请重新授权或使用手机号登录' : error.message;
+    status.textContent = error instanceof TypeError || ['AbortError', 'TimeoutError'].includes(error.name) ? '网络连接失败或超时，请重新授权' : error.message;
     actions.hidden = false;
     app.querySelector('.sermo-retry').focus();
   }
